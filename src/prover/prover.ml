@@ -172,7 +172,6 @@ let check wheres seq : bool  =
         else raise No_match
   ) wheres
 
-
 (* TODO Doesn't use obligation equalities to help with match. *)
 let apply_rule
      (sr : inner_sequent_rule)
@@ -194,11 +193,13 @@ let apply_rule
 	  let ass_f = {ass with spat=RMSet.union ass.spat seq.matched} in
 	  match_form true ts ass_f sr.conclusion.assumption_same
 	    (fun (ts,_) ->
-	      if (not (is_sempty sr.without_left) && contains ts ass_f sr.without_left) then
+          List.iter (fun without -> 
+	      if (not (is_sempty without.left) && contains ts ass_f without.left) then
 		raise No_match
-	      else if (not (is_sempty sr.without_right) && contains ts ob sr.without_right) then
+	      else if (not (is_sempty without.right) && contains ts ob without.right) then
 		raise No_match
-	      else if (not (check sr.where {seq with  (* TODO: do we want to use the old asm / ob here for the SMT guard? *)
+          ) sr.withouts ;
+	      if (not (check sr.where {seq with  (* TODO: do we want to use the old asm / ob here for the SMT guard? *)
 					    ts = ts;
 					    obligation = ob;
 					    assumption = ass})) then
@@ -524,7 +525,7 @@ let find_tactic_by_id id =
   None (*TODO: Implement*)
 
 let rec apply_tactic 
-  (wi : (syntactic_form * syntactic_form) list) 
+  (wi : without list) 
   (wh : where list) 
   (goal : sequent) 
   (tacexpr : tactical)
@@ -572,9 +573,26 @@ let rec apply_tactic
           errors = r1.errors;
         }  
       | Tactical_Rule seq_rule -> 
-        let (_,por,_,_,_) = seq_rule in
+        let (_,por,name,_,_) = seq_rule in
         (match por with
-          | Rule_Premises premises -> assert false           
+          | Rule_Premises premises -> 
+            (try 
+              let r = apply_rule (convert_tactical_rule seq_rule wi wh) goal in
+              { goals = List.hd r; (* Rule in a tactic should not have "OR" in premises*)
+                fails = [];
+                errors = [];
+              }
+            with No_match ->
+            { goals = [];
+              fails = [sprintf "Failed to apply rule %s." name];
+              errors = [];
+            }
+            | Failure "hd" ->
+              { goals = [];
+                fails = [];
+                errors = [];
+              }
+            )         
           | Error_Premise error -> 
               let (false_ob, _) = convert_sf false goal.ts false_sform in
               let new_goal = {
@@ -602,7 +620,7 @@ let rec apply_tactic
           | None -> {goals = []; fails = [sprintf "Failed to find rule %s." id]; errors = [];}
           | Some tac -> apply_tactic wi wh goal tac)
       | Tactical_Without ((wi_left, wi_right), tacexpr) -> 
-        apply_tactic (wi @ [(convert_to_inner wi_left, convert_to_inner wi_right)]) wh goal tacexpr
+        apply_tactic (wi @ [{left = convert_to_inner wi_left; right = convert_to_inner wi_right}]) wh goal tacexpr
       | Tactical_Where (whs, tacexpr) -> apply_tactic wi (wh @ whs) goal tacexpr
       | Tactical_Id msg -> 
         { goals = [goal];

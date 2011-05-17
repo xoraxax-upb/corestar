@@ -134,15 +134,19 @@ type pat_sequent = {
 val convert_sf : bool -> Cterm.term_structure -> syntactic_form -> (formula * Cterm.term_structure)
 val convert_sf_without_eqs : bool -> Cterm.term_structure -> syntactic_form -> (formula * Cterm.term_structure)
 val convert_sequent : Psyntax.psequent -> pat_sequent
+type without = {
+  left : syntactic_form;
+  right : syntactic_form;
+}
 type inner_sequent_rule = {
   conclusion : pat_sequent;
   premises : pat_sequent list list;
   name : string;
-  without_left : syntactic_form;
-  without_right : syntactic_form;
+  withouts: without list;
   where : Psyntax.where list;
 }
 val convert_rule : sequent_rule -> inner_sequent_rule
+val convert_tactical_rule : sequent_rule -> without list -> Psyntax.where list -> inner_sequent_rule
 val match_form : bool -> Cterm.term_structure -> formula -> syntactic_form -> (Cterm.term_structure * formula -> 'a) -> 'a
 val apply_or_left : sequent -> sequent list
 val apply_or_right : sequent -> sequent list list

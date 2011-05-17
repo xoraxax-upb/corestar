@@ -625,14 +625,18 @@ let convert_sequent (ps : psequent) : pat_sequent =
      } in 
 (*  Format.fprintf !(Debug.proof_dump) "Produced sequent: %a@ |@ %a@ |-@ %a@\n@\n" pp_sform ps.assumption_same pp_sform ps.assumption_diff pp_sform ps.obligation_diff; *)
   ps
+  
+type without = {
+  left : syntactic_form;
+  right : syntactic_form;
+}
 
 type inner_sequent_rule =
     {
       conclusion : pat_sequent ;
       premises : pat_sequent list list;
       name : string;
-      without_left : syntactic_form;
-      without_right : syntactic_form;
+      withouts : without list;
       where : where list;
    }
 
@@ -642,15 +646,29 @@ let convert_rule (sr : sequent_rule) : inner_sequent_rule =
     conc,prems,name,(withoutl,withoutr),where ->
 	  let rule_premises = match prems with
 	    | Rule_Premises rp -> List.map (List.map convert_sequent) rp
-	    | Error_Premise error -> assert false (* TODO handle error*)
+	    | Error_Premise error -> assert false (* Do not convert rule if it throws an error *)
 	  in
       {
         conclusion = convert_sequent conc;
         premises = rule_premises;
         name = name;
-        without_left = convert_to_inner withoutl;
-        without_right = convert_to_inner withoutr;
+        withouts = [{left = convert_to_inner withoutl ; right = convert_to_inner withoutr}];
         where = where;
+      }
+      
+let convert_tactical_rule (sr : sequent_rule) wi wh : inner_sequent_rule =
+  match sr with
+    conc,prems,name,(_,_),_ ->
+	  let rule_premises = match prems with
+	    | Rule_Premises rp -> List.map (List.map convert_sequent) rp
+	    | Error_Premise error -> assert false (* Do not convert rule if it throws an error *)
+	  in
+      {
+        conclusion = convert_sequent conc;
+        premises = rule_premises;
+        name = name;
+        withouts = wi;
+        where = wh;
       }
 
 
