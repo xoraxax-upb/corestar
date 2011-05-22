@@ -10,6 +10,6 @@ Specification Test2:
 nop;
 assign x := {Emp}{Emp} (y);
 label loop;
-assign x := {Emp}{Emp} ((x+y));
+call x := {Emp}{Emp} f((x+y), y);
 goto loop;
 end;

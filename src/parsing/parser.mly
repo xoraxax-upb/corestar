@@ -61,6 +61,7 @@ let parse_warning s =
 %token AXIOMS
 %token BANG
 %token BIMP
+%token CALL
 %token CMP_LE
 %token CMP_LT
 %token CMP_GE
@@ -418,6 +419,11 @@ core_stmt:
         call_rets=$2; 
         call_spec=HashSet.singleton $3; 
         call_args=$5} } 
+  | CALL core_assn_args spec IDENTIFIER L_PAREN term_npv_list R_PAREN  
+    { Call_core ($4, {
+        call_rets=$2;
+        call_spec=HashSet.singleton $3;
+        call_args=$6}) }
   | GOTO label_list { Goto_stmt_core $2 } 
   | LABEL IDENTIFIER  { Label_stmt_core $2 }
 ;

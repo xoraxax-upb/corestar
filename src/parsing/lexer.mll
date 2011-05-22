@@ -53,7 +53,8 @@ let kwd_or_else =
     "abstraction", ABSRULE;
     "assign", ASSIGN;
     "axioms", AXIOMS;
-    "constructor", CONSTRUCTOR;    
+    "call", CALL;
+    "constructor", CONSTRUCTOR;
     "Emp", EMP;
     "end", END;
     "equiv", EQUIV;
