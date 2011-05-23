@@ -1,6 +1,6 @@
 type 'a t = ('a, unit) Hashtbl.t
 
-let add h e = Hashtbl.add h e ()
+let add h e = Hashtbl.replace h e ()
 
 let remove h e = Hashtbl.remove h e
 
@@ -9,6 +9,8 @@ let create = Hashtbl.create
 let singleton e =
   let h = create 13 in
   add h e; h
+
+let mem = Hashtbl.mem
 
 let elements h =
   Hashtbl.fold (fun x _ xs -> x :: xs) h []
