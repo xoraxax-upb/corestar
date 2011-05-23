@@ -2,6 +2,8 @@ type 'a t = ('a, unit) Hashtbl.t
 
 let add h e = Hashtbl.add h e ()
 
+let remove h e = Hashtbl.remove h e
+
 let create = Hashtbl.create
 
 let singleton e =
