@@ -59,15 +59,24 @@ module Display_CfgH = struct
   include CfgH
 end
 module Dot_CfgH = Graph.Graphviz.Dot(Display_CfgH)
+
+let fprint_Cfg = Dot_Cfg.fprint_graph
+let fprint_CfgH = Dot_CfgH.fprint_graph
   
+let print_Cfg = fprint_Cfg std_formatter
+let print_CfgH = fprint_CfgH std_formatter
+
+let output_Cfg = Dot_Cfg.output_graph
+let output_CfgH = Dot_CfgH.output_graph
+
 let fileout file_name f =
   try
     let o = open_out file_name in
       f o; close_out o
   with _ -> eprintf "@[Could not create file %s@." file_name
 
-let output_Cfg file_name g = 
-  fileout file_name (fun o -> Dot_Cfg.output_graph o g)
+let fileout_Cfg file_name g = 
+  fileout file_name (fun o -> output_Cfg o g)
 
-let output_CfgH file_name g =
-  fileout file_name (fun o -> Dot_CfgH.output_graph o g)
+let fileout_CfgH file_name g =
+  fileout file_name (fun o -> output_CfgH o g)

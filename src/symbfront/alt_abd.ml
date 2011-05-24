@@ -56,33 +56,52 @@ let mk_intermediate_cfg cs =
   mic_add_edges r labels succ;
   r
 
-(* TODO(rusmus): This gives a stack overflow on loops with no interesting nodes *)
 let simplify_cfg {
     G.ProcedureH.cfg = g
   ; G.ProcedureH.start = start
   ; G.ProcedureH.stop = stop } =
   let sg = G.Cfg.create () in
-  let start_rep = G.Cfg.V.create G.Nop_cfg in
-  G.Cfg.add_vertex sg start_rep;
+  let representatives = Hashtbl.create 13 in
+  let rep_builder rep () =
+    let v_rep = G.Cfg.V.create rep in
+    G.Cfg.add_vertex sg v_rep;
+    v_rep in
+  let find_rep v builder =
+    try Hashtbl.find representatives v with Not_found ->
+      let v_rep = builder () in Hashtbl.add representatives v v_rep; v_rep in
+  let start_rep = rep_builder G.Nop_cfg () in
+  Hashtbl.add representatives start start_rep;
   let work_set = HashSet.singleton (start, start_rep) in
+  let done_set = HashSet.create 13 in
   let perform_work f =
     try while true do
       let current = HashSet.choose work_set in
       HashSet.remove work_set current;
+      HashSet.add done_set current;
       f current
     done
     with Not_found -> () in
-  let more_work v_rep new_v new_v_rep =
-    G.Cfg.add_vertex sg new_v_rep;
+  let more_work v_rep new_v new_v_rep_builder =
+    let new_v_rep = find_rep new_v new_v_rep_builder in
     G.Cfg.add_edge sg v_rep new_v_rep;
-    HashSet.add work_set (new_v, new_v_rep) in
-  let rec process_successor v_rep sv = match G.CfgH.V.label sv with
-      C.Assignment_core call ->
-	more_work v_rep sv (G.Cfg.V.create (G.Assign_cfg call))
-    | C.Call_core (fname, call) ->
-	more_work v_rep sv (G.Cfg.V.create (G.Call_cfg (fname, call))) 
-    | _ -> G.CfgH.iter_succ (process_successor v_rep) g sv in
-  let add_successors (v, v_rep) = G.CfgH.iter_succ (process_successor v_rep) g v in
+    if HashSet.mem done_set (new_v, new_v_rep) then () else
+      HashSet.add work_set (new_v, new_v_rep) in
+  let interest = function
+      C.Nop_stmt_core -> Some G.Nop_cfg
+    | C.Assignment_core call -> Some (G.Assign_cfg call)
+    | C.Call_core (fname, call) -> Some (G.Call_cfg (fname, call))
+    | _ -> None in
+  let rec process_successor v_rep visited sv = match interest (G.CfgH.V.label sv) with
+      Some i -> more_work v_rep sv (rep_builder i)
+    | None ->
+	if HashSet.mem visited sv then ()
+	else (
+	  HashSet.add visited sv;
+	  G.CfgH.iter_succ (process_successor v_rep visited) g sv
+	) in
+  let add_successors (v, v_rep) = 
+    let visited = HashSet.singleton v in
+    G.CfgH.iter_succ (process_successor v_rep visited) g v in
   perform_work add_successors;
   sg
 
@@ -124,18 +143,24 @@ let interpret gs =
   List.iter f gs
 (*   failwith "todo" *)
 
+let print_Cfg { C.proc_name=n; C.proc_spec=_; C.proc_body=g } =
+  printf "@[Graph for %s:@\n" n;
+  G.print_Cfg g;
+  printf "@]@."
+(*  printf "@[Graph for %s:@\n@a@." n G.fprint_Cfg g *)
+
 let output_Cfg { C.proc_name=n; C.proc_spec=_; C.proc_body=g } =
-  G.output_Cfg (n ^ "_Cfg.dot") g
+  G.fileout_Cfg (n ^ "_Cfg.dot") g
 
 let output_CfgH { C.proc_name=n; C.proc_spec=_; C.proc_body=g } =
-  G.output_CfgH (n ^ "_CfgH.dot") g.G.ProcedureH.cfg
+  G.fileout_CfgH (n ^ "_CfgH.dot") g.G.ProcedureH.cfg
 
 let main f =
   let ps = parse f in
   let igs = List.map (map_proc_body mk_intermediate_cfg) ps in
   List.iter output_CfgH igs;
   let gs = List.map (map_proc_body mk_cfg) ps in
-  List.iter output_Cfg gs;
+  List.iter print_Cfg gs;
   interpret gs
 
 let _ =
