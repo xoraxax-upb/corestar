@@ -46,7 +46,7 @@ module Display_CfgH = struct
   let vertex_attributes v = match CfgH.V.label v with
       C.Nop_stmt_core -> [`Label "NOP"]
     | C.Label_stmt_core s -> [`Label ("Label:" ^ s)]
-    | C.Assignment_core _ -> [`Label ("Assign")]
+    | C.Assignment_core _ -> [`Label ("Assign"); `Shape `Box]
     | C.Call_core (fname, _) -> [`Label ("Call " ^ fname); `Shape `Box]
     | C.Goto_stmt_core ss -> [`Label ("Goto:" ^ (String.concat ", " ss))]
     | C.End -> [`Label "End"]
