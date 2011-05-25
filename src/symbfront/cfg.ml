@@ -25,13 +25,13 @@ module Procedure = MakeProcedure (Cfg)
 module ProcedureH = MakeProcedure (CfgH)
 
 module Display_Cfg = struct
-  let vertex_name v = match Cfg.V.label v with
-      Assign_cfg _ -> "Assign"
-    | Call_cfg (fname, _) -> "Call " ^ fname
-    | Nop_cfg -> "nop"
+  let vertex_name v = string_of_int (Hashtbl.hash v)
   let graph_attributes _ = []
   let default_vertex_attributes _ = []
-  let vertex_attributes _ = []
+  let vertex_attributes v = match Cfg.V.label v with
+      Assign_cfg _ -> [`Label "Assign"]
+    | Call_cfg (fname, _) -> [`Label ("Call " ^ fname)]
+    | Nop_cfg -> [`Label "NOP"]
   let default_edge_attributes _ = []
   let edge_attributes _ = []
   let get_subgraph _ = None
@@ -40,19 +40,16 @@ end
 module Dot_Cfg = Graph.Graphviz.Dot(Display_Cfg)
 
 module Display_CfgH = struct
-  let vertex_name v = match CfgH.V.label v with
-      C.Nop_stmt_core -> "NOP"
-    | C.Label_stmt_core s -> "Label:" ^ s
-    | C.Assignment_core _ -> "Assign"
-    | C.Call_core (fname, _) -> "Call " ^ fname
-    | C.Goto_stmt_core ss -> "Goto:" ^ (String.concat ", " ss)
-    | C.End -> "End"
+  let vertex_name v = string_of_int (Hashtbl.hash v)
   let graph_attributes _ = []
   let default_vertex_attributes _ = []
   let vertex_attributes v = match CfgH.V.label v with
-      C.Assignment_core _
-    | C.Call_core _ -> [`Style `Bold]
-    | _ -> []
+      C.Nop_stmt_core -> [`Label "NOP"]
+    | C.Label_stmt_core s -> [`Label ("Label:" ^ s)]
+    | C.Assignment_core _ -> [`Label ("Assign")]
+    | C.Call_core (fname, _) -> [`Label ("Call " ^ fname); `Shape `Box]
+    | C.Goto_stmt_core ss -> [`Label ("Goto:" ^ (String.concat ", " ss))]
+    | C.End -> [`Label "End"]
   let default_edge_attributes _ = []
   let edge_attributes _ = []
   let get_subgraph _ = None

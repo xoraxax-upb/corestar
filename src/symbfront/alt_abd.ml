@@ -12,10 +12,11 @@ let parse fn =
 (* helpers for [mk_intermediate_cfg] {{{ *)
 let mic_create_vertices g cs =
   let succ = Hashtbl.create 13 in
+  let cs = C.Nop_stmt_core :: cs @ [C.Nop_stmt_core] in
   let vs = List.map G.CfgH.V.create cs in
   List.iter (G.CfgH.add_vertex g) vs;
   Misc.iter_pairs (Hashtbl.add succ) vs;
-  succ
+  List.hd vs, List.hd (List.rev vs), succ
 
 let mic_hash_labels g =
   let labels = Hashtbl.create 13 in
@@ -27,28 +28,24 @@ let mic_hash_labels g =
 
 let mic_add_edges r labels succ =
   let g = r.G.ProcedureH.cfg in
-  let get_succ x =
-    try Hashtbl.find succ x with Not_found -> r.G.ProcedureH.stop in
   let vertex_of_label l =
     try Hashtbl.find labels l
     with Not_found -> failwith "bad cfg (todo: nice user error)" in
-  let add_outgoing x = match G.CfgH.V.label x with
-    | C.Goto_stmt_core ls ->
-        List.iter (fun l -> G.CfgH.add_edge g x (vertex_of_label l)) ls
-    | C.End -> G.CfgH.add_edge g x r.G.ProcedureH.stop
-    | _ -> G.CfgH.add_edge g x (get_succ x) in
+  let add_outgoing x = if x <> r.G.ProcedureH.stop then begin
+      match G.CfgH.V.label x with
+      | C.Goto_stmt_core ls ->
+          List.iter (fun l -> G.CfgH.add_edge g x (vertex_of_label l)) ls
+      | C.End -> G.CfgH.add_edge g x r.G.ProcedureH.stop
+      | _  -> G.CfgH.add_edge g x (Hashtbl.find succ x)
+    end in
   G.CfgH.iter_vertex add_outgoing g
 
 (* }}} *)
 
 let mk_intermediate_cfg cs =
   let g = G.CfgH.create () in
-  let start = G.CfgH.V.create C.Nop_stmt_core in
-  let stop = G.CfgH.V.create C.Nop_stmt_core in
-  let succ = mic_create_vertices g cs in
+  let start, stop, succ = mic_create_vertices g cs in
   let labels = mic_hash_labels g in
-  G.CfgH.add_vertex g start;
-  G.CfgH.add_vertex g stop;
   let r =
     { G.ProcedureH.cfg = g
     ; G.ProcedureH.start = start
@@ -86,12 +83,12 @@ let simplify_cfg {
     G.Cfg.add_edge sg v_rep new_v_rep;
     if HashSet.mem done_set (new_v, new_v_rep) then () else
       HashSet.add work_set (new_v, new_v_rep) in
-  let interest = function
-      C.Nop_stmt_core -> Some G.Nop_cfg
+  let interest sv = match G.CfgH.V.label sv with
+      C.Nop_stmt_core when sv = start || sv = stop -> Some G.Nop_cfg
     | C.Assignment_core call -> Some (G.Assign_cfg call)
     | C.Call_core (fname, call) -> Some (G.Call_cfg (fname, call))
     | _ -> None in
-  let rec process_successor v_rep visited sv = match interest (G.CfgH.V.label sv) with
+  let rec process_successor v_rep visited sv = match interest sv with
       Some i -> more_work v_rep sv (rep_builder i)
     | None ->
 	if HashSet.mem visited sv then ()
@@ -160,7 +157,7 @@ let main f =
   let igs = List.map (map_proc_body mk_intermediate_cfg) ps in
   List.iter output_CfgH igs;
   let gs = List.map (map_proc_body mk_cfg) ps in
-  List.iter print_Cfg gs;
+  List.iter output_Cfg gs;
   interpret gs
 
 let _ =
