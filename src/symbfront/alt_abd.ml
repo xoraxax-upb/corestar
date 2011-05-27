@@ -68,38 +68,27 @@ let simplify_cfg {
       let v_rep = builder () in Hashtbl.add representatives v v_rep; v_rep in
   let start_rep = rep_builder G.Nop_cfg () in
   Hashtbl.add representatives start start_rep;
-  let work_set = HashSet.singleton (start, start_rep) in
-  let done_set = HashSet.create 13 in
-  let perform_work f =
-    try while true do
-      let current = HashSet.choose work_set in
-      HashSet.remove work_set current;
-      HashSet.add done_set current;
-      f current
-    done
-    with Not_found -> () in
-  let more_work v_rep new_v new_v_rep_builder =
-    let new_v_rep = find_rep new_v new_v_rep_builder in
-    G.Cfg.add_edge sg v_rep new_v_rep;
-    if HashSet.mem done_set (new_v, new_v_rep) then () else
-      HashSet.add work_set (new_v, new_v_rep) in
+  let work_set = WorkSet.singleton (start, start_rep) in
   let interest sv = match G.CfgH.V.label sv with
       C.Nop_stmt_core when sv = start || sv = stop -> Some G.Nop_cfg
     | C.Assignment_core call -> Some (G.Assign_cfg call)
     | C.Call_core (fname, call) -> Some (G.Call_cfg (fname, call))
     | _ -> None in
-  let rec process_successor v_rep visited sv = match interest sv with
-      Some i -> more_work v_rep sv (rep_builder i)
+  let rec process_successor new_interest v_rep visited sv = match interest sv with
+      Some i ->
+	let sv_rep = find_rep sv (rep_builder i) in
+	  G.Cfg.add_edge sg v_rep sv_rep;
+	  new_interest (sv, sv_rep)
     | None ->
 	if HashSet.mem visited sv then ()
 	else (
 	  HashSet.add visited sv;
-	  G.CfgH.iter_succ (process_successor v_rep visited) g sv
+	  G.CfgH.iter_succ (process_successor new_interest v_rep visited) g sv
 	) in
-  let add_successors (v, v_rep) = 
+  let add_successors new_interest (v, v_rep) = 
     let visited = HashSet.singleton v in
-    G.CfgH.iter_succ (process_successor v_rep visited) g v in
-  perform_work add_successors;
+    G.CfgH.iter_succ (process_successor new_interest v_rep visited) g v in
+  WorkSet.perform_work work_set add_successors;
   sg
 
 (* TODO(rgrig): This fails for 1->2, 1->3, 2->4, 3->4, all interesting. *)
