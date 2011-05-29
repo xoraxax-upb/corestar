@@ -20,7 +20,7 @@ open Psyntax
 open Sepprover
 open Spec
 
-type ts_excep_post = inner_form ClassMap.t 
+type ts_excep_post = inner_form ExceptionMap.t 
 
 let empty_inner_form = 
   match convert mkEmpty with
@@ -31,10 +31,10 @@ let empty_inner_form_af =
   lift_inner_form empty_inner_form
   
 let conjunction_excep excep_post f1 =
-  ClassMap.map (fun post -> Psyntax.pconjunction post f1) excep_post
+  ExceptionMap.map (fun post -> Psyntax.pconjunction post f1) excep_post
 
 let conjunction_excep_convert excep_post f1 =
-  ClassMap.map (fun post -> Sepprover.conjoin post f1) excep_post
+  ExceptionMap.map (fun post -> Sepprover.conjoin post f1) excep_post
 
 let combine_maps empty fold add find combine_values m1 m2 =
   let combine_add k v m =
@@ -43,7 +43,7 @@ let combine_maps empty fold add find combine_values m1 m2 =
   fold combine_add m1 m2
 
 let disjunction_excep = 
-  combine_maps ClassMap.empty ClassMap.fold ClassMap.add ClassMap.find (curry mkOr)
+  combine_maps ExceptionMap.empty ExceptionMap.fold ExceptionMap.add ExceptionMap.find (curry mkOr)
 
 let spec_conjunction spec1 spec2 =
   let var = Arg_var(Vars.freshe()) in
@@ -76,9 +76,9 @@ exception Check_fails
 
 let implication_excep logic excep1 excep2 = 
   try 
-    ClassMap.iter (
+    ExceptionMap.iter (
     fun exname form -> 
-      if Sepprover.implies logic form (ClassMap.find exname excep2) 
+      if Sepprover.implies logic form (ExceptionMap.find exname excep2) 
       then ()
       else raise Check_fails
    ) excep1; true
@@ -89,14 +89,14 @@ let sub_spec  sub spec =
     {pre=pre; post=post; excep=excep} ->
       {pre=subst_pform sub pre;
        post=subst_pform sub post;
-       excep=ClassMap.map (subst_pform sub) excep}
+       excep=ExceptionMap.map (subst_pform sub) excep}
       
 let ev_spec spec = 
   match spec with
     {pre=spec_pre; post=spec_post; excep =spec_excep} -> 
       let ev = ev_form spec_pre in 
       let ev = ev_form_acc spec_post ev in 
-      let ev = ClassMap.fold (fun key ex vs -> ev_form_acc ex vs) spec_excep ev in 
+      let ev = ExceptionMap.fold (fun key ex vs -> ev_form_acc ex vs) spec_excep ev in 
       ev
 
 let ev_spec_pre spec = 

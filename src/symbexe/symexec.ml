@@ -571,7 +571,8 @@ and execute_core_stmt
 (* TODO: a meaningful description of what this does *)      
 let verify 
     (mname : string) 
-    (stmts : cfg_node list)  
+    (stmts : cfg_node list)
+    (emap : (catch_labels list) ExceptionMap.t)  
     (spec : spec) 
     (lo : logic)
     (abs_rules : logic) 
@@ -581,7 +582,7 @@ let verify
   exec_type := SymExec;
   curr_logic := lo;
   curr_abs_rules := abs_rules;
-  stmts_to_cfg stmts;
+  stmts_to_cfg stmts emap;
   match stmts with 
   | [] -> failwith "Internal error: Method body shouldn't be empty."
   | s::_ -> 
@@ -610,6 +611,7 @@ let verify
 let verify_ensures 
      (name : string) 
      (stmts: cfg_node list) 
+     (emap : (catch_labels list) ExceptionMap.t)
      (post : Psyntax.pform) 
      conjoin_with_res_true
      (oldexp_frames : inner_form list list) 
@@ -640,7 +642,7 @@ let verify_ensures
   exec_type := SymExec;
 	curr_logic := lo;
   curr_abs_rules := abs_rules;
-  stmts_to_cfg stmts;
+  stmts_to_cfg stmts emap;
   match stmts with 
     [] -> assert false
   | s::stmts ->
@@ -685,6 +687,7 @@ let check_and_get_frame (pre_heap,id) post_sheap =
 (* TODO: Is this unused? What about the functions it calls? *)
 let get_frame 
      (stmts : cfg_node list) 
+     (emap : (catch_labels list) ExceptionMap.t)  
      (pre : Psyntax.pform) 
      (lo : logic) 
      (abs_rules : logic) 
@@ -693,7 +696,7 @@ let get_frame
   exec_type := SymExec;
   curr_logic := lo;
   curr_abs_rules := abs_rules;
-  stmts_to_cfg stmts;
+  stmts_to_cfg stmts emap;
   match stmts with 
     [] -> assert false
   | s::stmts -> 
@@ -716,6 +719,7 @@ let get_frame
 let verify_inner
     (mname : string)
     (stmts : cfg_node list)
+    (emap : (catch_labels list) ExceptionMap.t)  
     (spec_pre : inner_form)
     (spec_post : inner_form)
     (lo : logic)
@@ -725,7 +729,7 @@ let verify_inner
   exec_type := Check;
   curr_logic := lo;
   curr_abs_rules := abs_rules;
-  stmts_to_cfg stmts;
+  stmts_to_cfg stmts emap;
   match stmts with 
   | [] -> failwith "Internal error: Method body shouldn't be empty."
   | s::_ -> 
@@ -741,6 +745,7 @@ let verify_inner
 let bi_abduct 
     (mname : string) 
     (stmts : cfg_node list)  
+    (emap : (catch_labels list) ExceptionMap.t)
     (spec : spec) 
     (lo : logic) 
     (abduct_lo : logic) 
@@ -750,7 +755,7 @@ let bi_abduct
   curr_logic := lo;
   curr_abduct_logic := abduct_lo;
   curr_abs_rules := abs_rules;
-  stmts_to_cfg stmts;
+  stmts_to_cfg stmts emap;
   match stmts with 
   | [] -> []
   | s::_ -> 
@@ -788,5 +793,5 @@ let bi_abduct
             Format.printf "@\nSpec post:@\n    %a@.%!" string_inner_form spec_post; 
           end;
           Hashtbl.clear formset_table;
-          verify_inner (mname^".check("^(string_of_int !cnt)^")") stmts spec_pre spec_post lo abs_rules) specs in
+          verify_inner (mname^".check("^(string_of_int !cnt)^")") stmts emap spec_pre spec_post lo abs_rules) specs in
         specs'

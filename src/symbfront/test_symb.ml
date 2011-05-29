@@ -69,7 +69,7 @@ let main () : unit =
       match question with 
       | Core.SpecTest (mname,spec,core,result) ->
         let cfg = map Cfg_core.mk_node core in 
-  	(match (Symexec.verify mname cfg spec lo abs_rules), result with 
+  	(match (Symexec.verify mname cfg Spec.ExceptionMap.empty spec lo abs_rules), result with 
   	  true,true | false,false -> Format.printf "."
   	| true,false -> Format.printf "Test failed!" 
   	| false,true -> Format.printf "Test failed!" 

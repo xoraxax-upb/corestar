@@ -14,10 +14,17 @@
 
 (** Data structures used to represent specifications.
   Also, their pretty-printing. *)
+  
+module ExceptionMap = Map.Make (struct type t = string let compare = compare end)
 
-module ClassMap = Map.Make (struct type t = string let compare = compare end)
+type catch_labels =
+  {
+    from_label: string;
+    to_label: string;
+    with_label: string; 
+  }
 
-type excep_post = Psyntax.pform ClassMap.t 
+type excep_post = Psyntax.pform ExceptionMap.t 
 
 type spec = 
     { pre : Psyntax.pform;
@@ -32,8 +39,9 @@ let mk_spec pre post excep =
 
 let spec2str ppf (spec: spec)  = 
   let po s = Format.fprintf ppf "@\n@[<4>{%a}@]" Psyntax.string_form s in
+  let po_excep t s = Format.fprintf ppf "@\n@[<4>{%s:%a}@]" t Psyntax.string_form s in
   po spec.pre; po spec.post;
-  ClassMap.iter (fun _ s -> po s) spec.excep
+  ExceptionMap.iter (fun t s -> po_excep t s) spec.excep
 
 let pprinter_core_spec2str = ((Debug.toString spec2str) : (spec -> string))
   

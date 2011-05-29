@@ -66,7 +66,7 @@ let main () : unit =
          | Specification(mname,spec,core)  ->
             Format.printf "Method: %s\nSpec: %a"  mname  Spec.spec2str spec; 
             let stmts_core = map Cfg_core.mk_node core in 
-            if Symexec.verify mname stmts_core spec lo abs_rules then
+            if Symexec.verify mname stmts_core Spec.ExceptionMap.empty spec lo abs_rules then
             Format.printf "\nGood specification!\n\n" else Format.printf "\nBad specification!\n\n" 
       ) question_list     
     else
@@ -79,7 +79,7 @@ let main () : unit =
          | Specification(mname,spec,core)  ->
             Format.printf "\nMethod: %s\nSpec: %a"  mname  Spec.spec2str spec; 
             let stmts_core = map Cfg_core.mk_node core in 
-            let specs = Symexec.bi_abduct mname stmts_core spec lo abduct_lo abs_rules in
+            let specs = Symexec.bi_abduct mname stmts_core Spec.ExceptionMap.empty spec lo abduct_lo abs_rules in
             Format.printf "\nDiscovered specs:\n";
             List.iter (fun (spec_pre, spec_post) ->
               Format.printf "@\npre:@\n    %a@." Sepprover.string_inner_form spec_pre;

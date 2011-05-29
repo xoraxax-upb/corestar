@@ -11,8 +11,7 @@
       LICENSE.txt
  ********************************************************)
 
-
-module ClassMap :
+module ExceptionMap :
   sig
     type key = string
     type +'a t
@@ -29,7 +28,15 @@ module ClassMap :
     val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
     val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
   end
-type excep_post = Psyntax.pform ClassMap.t
+  
+type catch_labels =
+  {
+    from_label: string;
+    to_label: string;
+    with_label: string; 
+  }
+
+type excep_post = Psyntax.pform ExceptionMap.t
 type spec = {
   pre : Psyntax.pform;
   post : Psyntax.pform;

@@ -67,10 +67,12 @@ exception Contained
 val verify :
   string ->
   Cfg_core.cfg_node list ->
+  (Spec.catch_labels list) Spec.ExceptionMap.t ->  
   Spec.spec -> Psyntax.logic -> Psyntax.logic -> bool
 val verify_ensures :
   string ->
   Cfg_core.cfg_node list ->
+  (Spec.catch_labels list) Spec.ExceptionMap.t ->
   Psyntax.pform ->
   (Psyntax.pform -> Psyntax.form) ->
   Sepprover.inner_form list list -> Psyntax.logic -> Psyntax.logic -> unit
@@ -78,11 +80,13 @@ val verify_ensures :
 (* TODO: This is only used by translatejimple in jstar, so perhaps it should not be here. *)
 val get_frame :
   Cfg_core.cfg_node list ->
+  (Spec.catch_labels list) Spec.ExceptionMap.t ->
   Psyntax.pform ->
   Psyntax.logic -> Psyntax.logic -> Sepprover.inner_form list
 val bi_abduct :
   string ->
   Cfg_core.cfg_node list ->
+  (Spec.catch_labels list) Spec.ExceptionMap.t ->
   Spec.spec ->
   Psyntax.logic ->
   Psyntax.logic ->

@@ -394,8 +394,8 @@ spec:
 ;
 
 exp_posts:
-  | L_BRACE identifier COLON formula R_BRACE exp_posts { ClassMap.add $2 $4 $6 }
-  | /*empty */ { ClassMap.empty }
+  | L_BRACE identifier COLON formula R_BRACE exp_posts { Spec.ExceptionMap.add $2 $4 $6 }
+  | /*empty */ { Spec.ExceptionMap.empty }
 ;
 
 
