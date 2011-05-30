@@ -121,8 +121,8 @@ let print_icfg_dotty
   let d_cfgedge chan src dest =
     Printf.fprintf chan "\t\t%i -> %i\n" src.sid dest.sid in
   (* Print an exception edge between two stmts *)
-  let d_cfg_excep_edge chan src dest =
-    Printf.fprintf chan "\t\t%i -> %i\n" src.sid dest.sid in
+  let d_cfg_excep_edge chan src dest excep =
+    Printf.fprintf chan "\t\t%i -> %i [style=dotted label=\"%s\"]\n" src.sid dest.sid excep in
   (* Print a node and edges to its successors *)
   let d_cfgnode chan (s : cfg_node) =
     Printf.fprintf chan 
@@ -132,7 +132,7 @@ let print_icfg_dotty
       (Dot.escape_for_label (Debug.toString pp_stmt_core s.skind));
     List.iter (d_cfgedge chan s) s.succs;
     ExceptionMap.iter (fun excep nodes -> 
-      List.iter (d_cfg_excep_edge chan s) nodes
+      List.iter (fun d -> d_cfg_excep_edge chan s d excep) nodes
     ) s.esuccs in
 
   if cfg_debug () then ignore (Printf.printf "\n\nPrinting iCFG as dot file...");

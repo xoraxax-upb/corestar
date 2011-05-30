@@ -401,6 +401,21 @@ let heap_pprinter f h =
   | Abduct -> string_inner_form_af f h
   | Check | SymExec -> string_inner_form f (inner_form_af_to_form h) 
 
+type exec_posts = formset_entry list * (formset_entry list) Spec.ExceptionMap.t
+
+let join_posts (posts1: exec_posts) (posts2: exec_posts) : exec_posts =
+  let (post1, excep_posts1) = posts1 in
+  let (post2, excep_posts2) = posts2 in
+  let post_r = post1 @ post2 in
+  let exec_posts_r = Spec.ExceptionMap.fold (fun excep_name excep_post excep_posts ->
+    let old_value = try Spec.ExceptionMap.find excep_name excep_posts with Not_found -> [] in
+    let new_value = excep_post @ old_value in
+    Spec.ExceptionMap.add excep_name new_value excep_posts 
+  ) excep_posts1 excep_posts2 in
+  (post_r, exec_posts_r)
+  
+let flatten_posts (l : exec_posts list) : exec_posts =
+  List.fold_left join_posts ([], Spec.ExceptionMap.empty) l
 
 let rec exec (n : cfg_node) (sheap : formset_entry) = 
   let sheap_noid = fst sheap in
@@ -409,27 +424,30 @@ let rec exec (n : cfg_node) (sheap : formset_entry) =
     Format.printf "Output to %i with heap@\n   %a@\n" (node_get_id n) (string_ts_form (Rterm.rao_create ())) sform_noid; *)
   execute_core_stmt n sheap
 
-
 and execs_with_function 
    (n : cfg_node) 
    (sheaps : formset_entry list) 
    (g : cfg_node -> cfg_node list)
-   : formset_entry list = 
+   : exec_posts = 
   let rec f ls = 
     match ls with 
-    | [] -> []
-    | [s] -> List.flatten (List.map (exec s) sheaps)
-    | s::ls' -> List.flatten(List.map (fun h -> exec s h) sheaps) @ (f ls') 
+    | [] -> ([], Spec.ExceptionMap.empty)
+    | [s] -> flatten_posts (List.map (exec s) sheaps)
+    | s::ls' -> join_posts (flatten_posts (List.map (fun h -> exec s h) sheaps)) (f ls') 
   in
   let succs = g n in
   match succs with 
     [] -> 
       if Config.symb_debug() then printf "Exit node %i\n%!" (n.sid);
-      sheaps
+      (sheaps, Spec.ExceptionMap.empty)
   |  _ -> f succs
 
 and execs_one n sheaps =
 	execs_with_function n sheaps (fun n -> if n.skind = End then [] else n.succs)
+  
+and execs_one_excep n sheaps excep_name =
+  let nodes = try ExceptionMap.find excep_name n.esuccs with Not_found -> [] in
+	execs_with_function n sheaps (fun n -> if n.skind = End then [] else nodes)
 	
 and execs n sheaps =
 	execs_with_function n sheaps (fun n -> [n])
@@ -438,7 +456,7 @@ and execs n sheaps =
 and execute_core_stmt 
     (n : cfg_node) 
     (sheap : formset_entry) 
-    : formset_entry list =
+    : exec_posts =
   let sheap_noid = fst sheap in
   if Config.symb_debug() then
     (Format.printf "@\nExecuting statement:@ %a%!" Pprinter_core.pp_stmt_core n.skind;
@@ -528,7 +546,7 @@ and execute_core_stmt
         formset_table_replace id (sheaps_abs @ formset);
         execs_one n sheaps_abs
       with Contained -> 
-        if Config.symb_debug() then Format.printf "Formula contained.\n%!"; [])
+        if Config.symb_debug() then Format.printf "Formula contained.\n%!"; ([], Spec.ExceptionMap.empty))
 
     | Goto_stmt_core _ -> execs_one n [sheap]
 
@@ -544,7 +562,7 @@ and execute_core_stmt
           | _ -> false
         in
         if abort then
-          [ (empty_inner_form_af, add_good_node "Abort") ]
+          ([ (empty_inner_form_af, add_good_node "Abort") ], Spec.ExceptionMap.empty)
         else
           let hs = match hs with | None -> [] | Some hs -> hs in
           let hs =
@@ -553,7 +571,18 @@ and execute_core_stmt
             | vs -> List.map (eliminate_ret_vs "$ret_v" vs) hs
           in
           let hs = add_id_formset_edge (snd sheap) (Debug.toString Pprinter_core.pp_stmt_core n.skind) hs n in
-          execs_one n hs
+          let res = execs_one n hs in
+          let excep_res = Spec.ExceptionMap.mapi (fun excep_name excep_post -> 
+            let new_spec = mk_spec spec.pre excep_post ExceptionMap.empty in
+            let hs = call_jsr_static sheap new_spec il n in
+            let hs = match hs with | None -> [] | Some hs -> hs in
+            let hs = add_id_formset_edge (snd sheap) (Debug.toString Pprinter_core.pp_stmt_core n.skind) hs n in
+            let esuccs = try ExceptionMap.find excep_name n.esuccs with Not_found -> [] in
+            if (esuccs = []) then
+              ([], ExceptionMap.add excep_name hs ExceptionMap.empty)
+            else execs_one_excep n hs excep_name
+          ) spec.excep in
+          Spec.ExceptionMap.fold (fun _ posts result -> join_posts posts result) excep_res res 
       )
 
     | Throw_stmt_core _ -> assert  false 
@@ -595,14 +624,23 @@ let verify
       |	Some spec_pre -> 
           proof_succeeded := true; (* mutable state recording whether the proof failed.  *)
           let pre = lift_inner_form spec_pre in
-          let posts = execute_core_stmt s (pre, id) in
+          let (posts,eposts) = execute_core_stmt s (pre, id) in
           let post = 
             match Sepprover.convert (spec.post) with
               None -> printf "@{<b>WARNING@}: %s has an unsatisfiable postcondition@.%!" mname; empty_inner_form_af
             | Some spec_post -> lift_inner_form spec_post
           in
           let id_exit = add_good_node ("Exit") in
-          let ret = List.for_all (check_postcondition [(post, id_exit)]) posts in 
+          let ret = List.for_all (check_postcondition [(post, id_exit)]) posts in
+          let ret = Spec.ExceptionMap.fold (fun excep_name excep_posts ret ->
+          let spec_excep_post = try Spec.ExceptionMap.find excep_name spec.excep with Not_found -> mkFalse in
+          let epost = 
+            match Sepprover.convert (spec_excep_post) with
+              None -> printf "@{<b>WARNING@}: %s has an unsatisfiable postcondition@.%!" mname; empty_inner_form_af
+            | Some spec_post -> lift_inner_form spec_post
+          in
+          let id_exit = add_good_node ("Exit") in
+          (List.for_all (check_postcondition [(epost, id_exit)]) excep_posts) && ret) eposts ret in
           pp_dotty_transition_system (); 
           (* TODO: the way verification failure is currently handled is stupid *)
           if !proof_succeeded then ret else false
@@ -648,7 +686,7 @@ let verify_ensures
   | s::stmts ->
       let id = add_good_node ("Start "^name) in  
       make_start_node id;
-      let posts = execs s (List.map (fun pre -> (pre,id)) ensures_preconds) in
+      let (posts,eposts) = execs s (List.map (fun pre -> (pre,id)) ensures_preconds) in
       let id_exit = add_good_node ("Exit") in
       ignore (List.map 
         (fun post -> 
@@ -707,8 +745,9 @@ let get_frame
         None -> printf "@{<b>WARNING:@} False precondition in spec.@.%!"; []
       |	Some rlogic_pre ->
         let pre = lift_inner_form rlogic_pre in
+        let (posts,eposts) = execute_core_stmt s (pre, id) in
         let post = 
-          match execute_core_stmt s (pre, id) with
+          match posts with
           | [p] -> p
           | [] -> assert false
           | _ -> assert false  (* an old expression is guaranteed to have only one exit point *) 
@@ -736,7 +775,7 @@ let verify_inner
       let id = add_good_node ("Start "^mname) in  
       make_start_node id;
       let pre = lift_inner_form spec_pre in
-      let posts = execute_core_stmt s (pre, id) in
+      let (posts,eposts) = execute_core_stmt s (pre, id) in
       let post = lift_inner_form spec_post in
       let id_exit = add_good_node ("Exit") in
       List.for_all (check_postcondition [(post, id_exit)]) posts
@@ -767,7 +806,7 @@ let bi_abduct
         exec_type := Abduct;
          let id = add_good_node ("Start "^mname) in  
          make_start_node id;
-        let posts = execute_core_stmt s (lift_inner_form pre, id) in
+        let (posts,eposts) = execute_core_stmt s (lift_inner_form pre, id) in
         (* build spec pre/post pairs *)
         let specs = List.map 
           (fun (heap,_) -> (Sepprover.conjoin_inner pre (inner_form_af_to_af heap), inner_form_af_to_form heap))
