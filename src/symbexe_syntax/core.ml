@@ -29,7 +29,7 @@ type core_statement =
     Nop_stmt_core
   | Label_stmt_core of string
   | Assignment_core of call_core
-  | Call_core of string * call_core
+  | Call_core of string * call_core (* TODO: move specs centrally *)
   | Goto_stmt_core of string list
   | End
 type symb_question = core_statement list procedure

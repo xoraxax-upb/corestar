@@ -10,53 +10,79 @@ let parse fn =
   System.parse_file Parser.symb_question_file Lexer.token fn "core"
 
 (* helpers for [mk_intermediate_cfg] {{{ *)
+module CfgH = Graph.Imperative.Digraph.Abstract
+  (struct type t = C.core_statement end)
+
+module ProcedureH = G.MakeProcedure (CfgH)
+
+module Display_CfgH = struct
+  include G.Display_Cfg
+  let vertex_attributes v = match CfgH.V.label v with
+      C.Nop_stmt_core -> [`Label "NOP"]
+    | C.Label_stmt_core s -> [`Label ("Label:" ^ s)]
+    | C.Assignment_core _ -> [`Label ("Assign"); `Shape `Box]
+    | C.Call_core (fname, _) -> [`Label ("Call " ^ fname); `Shape `Box]
+    | C.Goto_stmt_core ss -> [`Label ("Goto:" ^ (String.concat ", " ss))]
+    | C.End -> [`Label "End"]
+end
+module Dot_CfgH = Graph.Graphviz.Dot(struct
+  include Display_CfgH
+  include CfgH
+end)
+module Dfs = Graph.Traverse.Dfs(CfgH)
+let fprint_CfgH = Dot_CfgH.fprint_graph
+let print_CfgH = fprint_CfgH std_formatter
+let output_CfgH = Dot_CfgH.output_graph
+let fileout_CfgH file_name g =
+  G.fileout file_name (fun o -> output_CfgH o g)
+
 let mic_create_vertices g cs =
   let succ = Hashtbl.create 13 in
   let cs = C.Nop_stmt_core :: cs @ [C.Nop_stmt_core] in
-  let vs = List.map G.CfgH.V.create cs in
-  List.iter (G.CfgH.add_vertex g) vs;
+  let vs = List.map CfgH.V.create cs in
+  List.iter (CfgH.add_vertex g) vs;
   Misc.iter_pairs (Hashtbl.add succ) vs;
   List.hd vs, List.hd (List.rev vs), succ
 
 let mic_hash_labels g =
   let labels = Hashtbl.create 13 in
-  let f v = match G.CfgH.V.label v with
+  let f v = match CfgH.V.label v with
     | C.Label_stmt_core l -> Hashtbl.add labels l v
     | _ -> () in
-  G.CfgH.iter_vertex f g;
+  CfgH.iter_vertex f g;
   labels
 
 let mic_add_edges r labels succ =
-  let g = r.G.ProcedureH.cfg in
+  let g = r.ProcedureH.cfg in
   let vertex_of_label l =
     try Hashtbl.find labels l
     with Not_found -> failwith "bad cfg (todo: nice user error)" in
-  let add_outgoing x = if x <> r.G.ProcedureH.stop then begin
-      match G.CfgH.V.label x with
+  let add_outgoing x = if x <> r.ProcedureH.stop then begin
+      match CfgH.V.label x with
       | C.Goto_stmt_core ls ->
-          List.iter (fun l -> G.CfgH.add_edge g x (vertex_of_label l)) ls
-      | C.End -> G.CfgH.add_edge g x r.G.ProcedureH.stop
-      | _  -> G.CfgH.add_edge g x (Hashtbl.find succ x)
+          List.iter (fun l -> CfgH.add_edge g x (vertex_of_label l)) ls
+      | C.End -> CfgH.add_edge g x r.ProcedureH.stop
+      | _  -> CfgH.add_edge g x (Hashtbl.find succ x)
     end in
-  G.CfgH.iter_vertex add_outgoing g
+  CfgH.iter_vertex add_outgoing g
 
 (* }}} *)
 
 let mk_intermediate_cfg cs =
-  let g = G.CfgH.create () in
+  let g = CfgH.create () in
   let start, stop, succ = mic_create_vertices g cs in
   let labels = mic_hash_labels g in
   let r =
-    { G.ProcedureH.cfg = g
-    ; G.ProcedureH.start = start
-    ; G.ProcedureH.stop = stop } in
+    { ProcedureH.cfg = g
+    ; ProcedureH.start = start
+    ; ProcedureH.stop = stop } in
   mic_add_edges r labels succ;
   r
 
 let simplify_cfg {
-    G.ProcedureH.cfg = g
-  ; G.ProcedureH.start = start
-  ; G.ProcedureH.stop = stop } =
+    ProcedureH.cfg = g
+  ; ProcedureH.start = start
+  ; ProcedureH.stop = stop } =
   let sg = G.Cfg.create () in
   let representatives = Hashtbl.create 13 in
   let rep_builder rep () =
@@ -69,7 +95,7 @@ let simplify_cfg {
   let start_rep = rep_builder G.Nop_cfg () in
   Hashtbl.add representatives start start_rep;
   let work_set = WorkSet.singleton (start, start_rep) in
-  let interest sv = match G.CfgH.V.label sv with
+  let interest sv = match CfgH.V.label sv with
       C.Nop_stmt_core when sv = start || sv = stop -> Some G.Nop_cfg
     | C.Assignment_core call -> Some (G.Assign_cfg call)
     | C.Call_core (fname, call) -> Some (G.Call_cfg (fname, call))
@@ -83,43 +109,15 @@ let simplify_cfg {
 	if HashSet.mem visited sv then ()
 	else (
 	  HashSet.add visited sv;
-	  G.CfgH.iter_succ (process_successor new_interest v_rep visited) g sv
+	  CfgH.iter_succ (process_successor new_interest v_rep visited) g sv
 	) in
-  let add_successors new_interest (v, v_rep) = 
+  let add_successors new_interest (v, v_rep) =
     let visited = HashSet.singleton v in
-    G.CfgH.iter_succ (process_successor new_interest v_rep visited) g v in
+    CfgH.iter_succ (process_successor new_interest v_rep visited) g v in
   WorkSet.perform_work work_set add_successors;
   sg
 
-(* TODO(rgrig): This fails for 1->2, 1->3, 2->4, 3->4, all interesting. *)
-(*
-let simplify_cfg g =
-  let sg = G.Cfg.create () in
-  let node_stack = Stack.create () in
-  Stack.push None node_stack;
-  let push_rep rv =
-    G.Cfg.add_vertex sg rv;
-    match Stack.top node_stack with
-	Some v -> G.Cfg.add_edge sg v rv
-      | None -> ();
-    Stack.push (Some rv) node_stack in
-  let pop_rep () = ignore (Stack.pop node_stack) in
-  let pre v = match G.CfgH.V.label v with
-      C.Assignment_core call -> 
-	push_rep (G.Cfg.V.create (G.Assign_cfg call))
-    | C.Call_core (fname, call) ->
-	push_rep (G.Cfg.V.create (G.Call_cfg (fname, call))) 
-    | _ -> () in
-  let post v = match G.CfgH.V.label v with
-      C.Assignment_core _
-    | C.Call_core _ ->
-	pop_rep ()
-    | _ -> () in
-  G.Dfs.iter ~pre:pre ~post:post g;
-  sg
-    *)
-
-let mk_cfg cs = 
+let mk_cfg cs =
   let g = mk_intermediate_cfg cs in
   simplify_cfg g
 
@@ -139,10 +137,11 @@ let output_Cfg { C.proc_name=n; C.proc_spec=_; C.proc_body=g } =
   G.fileout_Cfg (n ^ "_Cfg.dot") g
 
 let output_CfgH { C.proc_name=n; C.proc_spec=_; C.proc_body=g } =
-  G.fileout_CfgH (n ^ "_CfgH.dot") g.G.ProcedureH.cfg
+  fileout_CfgH (n ^ "_CfgH.dot") g.ProcedureH.cfg
 
 let main f =
   let ps = parse f in
+  (* TODO: skip next two, and move printing. *)
   let igs = List.map (map_proc_body mk_intermediate_cfg) ps in
   List.iter output_CfgH igs;
   let gs = List.map (map_proc_body mk_cfg) ps in
