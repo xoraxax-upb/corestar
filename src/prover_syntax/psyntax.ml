@@ -452,10 +452,7 @@ let string_where ppf where =
       Format.fprintf ppf "%a pureguard"
       string_form f
       
-type error_premise = {
-  tactical_error : string;
-  tactic_to_prove : string
-}
+type error_premise = string
         
 type sequent_rule_premises =
 	| Rule_Premises of psequent list list
@@ -479,7 +476,7 @@ let pp_sequent_rule f ((c, hss, n, w, ss) : sequent_rule) =
   fprintf f "@\n@[<2>rule %s:" n;
   p "" pp_psequent c;
   (match hss with
-	| Error_Premise ep -> fprintf f "@\n@[<4>%s with %s@]" ep.tactical_error ep.tactic_to_prove
+	| Error_Premise ep -> fprintf f "@\n@[<4>%s@]" ep
 	| Rule_Premises premises -> 
 	  (match premises with
 	    | [] -> ()
@@ -719,6 +716,7 @@ type tactical =
 	| Tactical_Where of (where list) * tactical
 	| Tactical_Id of string
 	| Tactical_Fail of string
+  | Tactical_Contr of tactical
 
 type tactic = tactical * string
 

@@ -128,10 +128,7 @@ type where =
   | NotInContext of varterm 
   | NotInTerm of varterm * args
   | PureGuard of pform 
-type error_premise = {
-  tactical_error : string;
-  tactic_to_prove : string
-}
+type error_premise = string
 type sequent_rule_premises =
 	| Rule_Premises of psequent list list
 	| Error_Premise of error_premise

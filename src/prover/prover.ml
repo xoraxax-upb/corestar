@@ -594,24 +594,10 @@ let rec apply_tactic
               }
             )         
           | Error_Premise error -> 
-              let (false_ob, _) = convert_sf false goal.ts false_sform in
-              let new_goal = {
-                matched = goal.matched;
-                ts = goal.ts;
-                assumption = goal.assumption;
-                obligation = false_ob;
-                antiframe = goal.antiframe; 
-              } in
-              let r1 = apply_tactic wi wh new_goal (Tactical_Call error.tactic_to_prove) in
-              if (r1.goals = [] && r1.fails = [] && r1.errors = []) then 
-              { goals = [];
-                fails = [];
-                errors = [];
-              }
-              else {
+              {
                 goals = [];
                 fails = [];
-                errors = r1.errors @ [error.tactical_error]  
+                errors = [error]  
               }
             )  
       | Tactical_Call id -> 
