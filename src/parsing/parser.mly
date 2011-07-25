@@ -493,7 +493,7 @@ tactical_rule:
 
 sequent_list_or_error:
   | sequent_list { Rule_Premises([$1]) }
-  | ERROR STRING_CONSTANT { Error_Premise {tactical_error=$2} }
+  | ERROR STRING_CONSTANT { Error_Premise $2 }
 ;
 
 tactical: 

@@ -618,6 +618,15 @@ let rec apply_tactic
           fails = [msg];
           errors = [];
         }  
+      | Tactical_Contr tacexpr ->  let (false_ob, _) = convert_sf false goal.ts false_sform in
+              let new_goal = {
+                matched = goal.matched;
+                ts = goal.ts;
+                assumption = goal.assumption;
+                obligation = false_ob;
+                antiframe = goal.antiframe; 
+              } in
+              apply_tactic wi wh new_goal tacexpr
 						
 			
 	

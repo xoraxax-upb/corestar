@@ -214,4 +214,6 @@ type tactical =
 	| Tactical_Where of (where list) * tactical
 	| Tactical_Id of string
 	| Tactical_Fail of string
+  | Tactical_Contr of tactical
+ 
 type tactic = tactical * string
