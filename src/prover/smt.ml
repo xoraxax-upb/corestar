@@ -57,7 +57,8 @@ let smt_init () : unit =
         smtout := o;  smtin := i;  smterr := e;
         smtout_lex := Lexing.from_channel !smtout;
         Config.smt_run := true;
-        if Config.smt_debug() then printf "@[SMT running.@."
+        if Config.smt_debug() then printf "@[SMT running.@.";
+        output_string i "(set-option :print-success false)\n"; flush i
       end
     with
     | Unix_error(err,f,a) ->
@@ -112,16 +113,27 @@ let rec list_to_pairs
   | [] -> []
 
 
-(* munge out input characters that make z3 die horribly *)
-(* We should probably handle this in a more principled way *)
-
-let cmd_munge (s : string) : string =
-  let s = Str.global_replace (Str.regexp "[@\\$]") "AT_" s in
-  s
-
-let str_munge (s : string ) : string =
-  let s = Str.global_replace (Str.regexp "[<> @\\*]")  "_" s in
-  s
+(* This function should be used below to munge all symbols (usually known as
+  identifiers). See Section 3.1 of SMT-LIB standard for allowed symbols. *)
+(* TODO: Munge keywords such as par, NUMERAL, _, as, let. *)
+let id_munge =
+  let ok_char = Array.make 256 false in
+  let range_ok a z =
+    for c = Char.code a to Char.code z do ok_char.(c) <- true done in
+  range_ok 'a' 'z'; range_ok 'A' 'Z'; range_ok '0' '9';
+  String.iter (fun c -> ok_char.(Char.code c) <- true) "~!@$^&*_+=<>?/-";
+  fun s ->
+    let n = String.length s in
+    let rec ok i = i = n || (ok_char.(Char.code s.[i]) && ok (succ i)) in
+    if ok 0 then s else begin
+      let r = Buffer.create (n + 2) in
+      Buffer.add_char r '|';
+      String.iter
+        (function '|' -> Buffer.add_string r "PIPE" | c -> Buffer.add_char r c)
+        s;
+      Buffer.add_char r '|';
+      Buffer.contents r
+    end
 
 
 (* Datatype to hold smt type annotations *)
@@ -130,7 +142,6 @@ type smt_type =
   | SMT_Var of Vars.var
   | SMT_Pred of string * int
   | SMT_Op of string * int
-
 
 module SMTTypeSet =
   Set.Make(struct
@@ -149,7 +160,7 @@ let rec args_smttype (arg : Psyntax.args) : smttypeset =
   | Arg_string s ->
           let rxp = (Str.regexp "^\\(-?[0-9]+\\)") in
           if Str.string_match rxp s 0 then SMTTypeSet.empty
-          else SMTTypeSet.singleton (SMT_Op("string_const_"^(str_munge s), 0))
+          else SMTTypeSet.singleton (SMT_Op("string_const_"^s, 0))
 
   | Arg_op ("builtin_plus",args) -> smt_union_list (map args_smttype args)
   | Arg_op ("builtin_minus",args) -> smt_union_list (map args_smttype args)
@@ -166,11 +177,11 @@ let rec args_smttype (arg : Psyntax.args) : smttypeset =
 
 let rec string_sexp_args (arg : Psyntax.args) : string =
   match arg with
-  | Arg_var v -> Vars.string_var v
+  | Arg_var v -> id_munge(Vars.string_var v)
   | Arg_string s ->
           let rxp = (Str.regexp "^\\(-?[0-9]+\\)") in
           if Str.string_match rxp s 0 then (Str.matched_group 1 s)
-          else "string_const_"^(str_munge s)
+          else id_munge("string_const_"^s)
 
   | Arg_op ("builtin_plus",[a1;a2]) ->
           Printf.sprintf "(+ %s %s)" (string_sexp_args a1) (string_sexp_args a2)
@@ -179,9 +190,9 @@ let rec string_sexp_args (arg : Psyntax.args) : string =
   | Arg_op ("builtin_mult",[a1;a2]) ->
           Printf.sprintf "(* %s %s)" (string_sexp_args a1) (string_sexp_args a2)
   | Arg_op ("numeric_const", [Arg_string(a)]) -> a
-
+  | Arg_op (name,[]) -> id_munge ("op_"^name)
   | Arg_op (name,args) ->
-          Printf.sprintf "(%s %s)" ("op_"^name) (string_sexp_args_list args)
+          Printf.sprintf "(%s %s)" (id_munge("op_"^name)) (string_sexp_args_list args)
   | Arg_record _ -> ""  (* shouldn't happen as converted to preds *)
   | Arg_cons _ -> failwith "TODO"
 and string_sexp_args_list (argsl : Psyntax.args list) : string =
@@ -215,11 +226,13 @@ let string_sexp_pred (p : string * Psyntax.args) : (string * smttypeset) =
       (Printf.sprintf "(<= %s)" (string_sexp_args_list [a1;a2]), SMTTypeSet.empty)
 
   | (name, args) ->
-    let name = "pred_"^name in
+    let name = id_munge("pred_"^name) in
     match args with
       | Arg_op ("tuple",al) ->
           let types = SMTTypeSet.add (SMT_Pred(name,(length al))) (args_smttype args) in
-        (Printf.sprintf "(%s %s)" name (string_sexp_args_list al), types)
+          ((if al = [] then name else
+            Printf.sprintf "(%s %s)" name (string_sexp_args_list al)),
+          types)
       | _ -> failwith "TODO"
 
 
@@ -264,104 +277,72 @@ let rec string_sexp_form
 
 let string_sexp_decl (t : smt_type) : string =
   match t with
-  | SMT_Var v -> Printf.sprintf "(declare-fun %s () Int)" (Vars.string_var v)
+  | SMT_Var v ->
+      Printf.sprintf "(declare-fun %s () Int)" (id_munge (Vars.string_var v))
   | SMT_Pred (s,i)
-      -> Printf.sprintf "(declare-fun %s (%s) Bool)" s (nstr "Int " i)
+      -> Printf.sprintf "(declare-fun %s (%s) Bool)" (id_munge s) (nstr "Int " i)
   | SMT_Op (s,i)
-      -> Printf.sprintf "(declare-fun %s (%s) Int)" s (nstr "Int " i)
+      -> Printf.sprintf "(declare-fun %s (%s) Int)" (id_munge s) (nstr "Int " i)
 
 
 (* Main SMT IO functions *)
+
+let smt_listen () =
+  match Smtparse.main Smtlex.token !smtout_lex with
+    | Error e -> raise (SMT_error e)
+    | response -> response
+
 let smt_command
     (cmd : string)
-    : smt_response =
+    : unit =
   try
-    let cmd = cmd_munge cmd in
     if Config.smt_debug() then printf "@[%s@." cmd;
     print_flush();
     output_string !smtin cmd;
     output_string !smtin "\n";
     flush !smtin;
-    let response = Smtparse.main Smtlex.token !smtout_lex in
-    Lexing.flush_input !smtout_lex; (* not sure why this is necessary *)
-    match response with
-    | Error e -> raise (SMT_error e)
-    | _ -> response
   with End_of_file | Sys_error _ -> raise SMT_fatal_error
 
 
 let smt_assert (ass : string) : unit =
   let cmd = "(assert " ^ ass ^ " )" in
-  match (smt_command cmd) with
-  | Success ->
-     begin
-        match !smt_onstack with
-        | x::xs -> smt_onstack := (cmd::x)::xs
-        | [] -> assert false
-     end
-  | _ -> raise (SMT_error "Assertion failed!")
-
+  smt_command cmd;
+  smt_onstack := (cmd :: List.hd !smt_onstack) :: List.tl !smt_onstack
 
 let smt_check_sat () : bool =
-  let res =
-    try let x = Hashtbl.find smt_memo !smt_onstack in
-        if Config.smt_debug() then printf "@[[Found memoised SMT call!]@."; x
+    try
+      let x = Hashtbl.find smt_memo !smt_onstack in
+      if Config.smt_debug() then printf "@[[Found memoised SMT call!]@.";
+      x
     with Not_found ->
-      let x = smt_command "(check-sat)" in
-      Hashtbl.add smt_memo !smt_onstack x; x
-  in
-  match res with
-    | Sat -> true
-    | Unsat -> false
-    | Unknown -> if Config.smt_debug() then printf
-      "@[[Warning: smt returned 'unknown' rather than 'unsat']@."; false
-    | _ -> failwith "TODO"
-
+      smt_command "(check-sat)";
+      let x = match smt_listen () with
+        | Sat -> true
+        | Unsat -> false
+        | Unknown -> if Config.smt_debug() then printf
+          "@[[Warning: smt returned 'unknown' rather than 'sat']@."; true
+        | _ -> failwith "TODO" in
+      Hashtbl.add smt_memo !smt_onstack x;
+      x
 
 let smt_check_unsat () : bool =
-  let res =
-  try let x = Hashtbl.find smt_memo !smt_onstack in
-      if Config.smt_debug() then printf "@[[Found memoised SMT call!]@."; x
-    with Not_found ->
-      let x = smt_command "(check-sat)" in
-      Hashtbl.add smt_memo !smt_onstack x; x
-  in
-  match res with
-  | Unsat -> true
-  | Sat -> false
-  | Unknown -> if Config.smt_debug() then printf
-                   "@[[Warning: smt returned 'unknown' rather than 'sat']@.";
-               false
-  | _ -> failwith "TODO"
-
+  not (smt_check_sat ())
 
 let smt_push () : unit =
-  match smt_command "(push)" with
-  | Success -> smt_fdepth := (!smt_fdepth + 1);
-               smt_onstack := ([]::!smt_onstack)
-  | _ -> raise (SMT_error "Push failed!")
-
+  smt_command "(push)";
+  incr smt_fdepth;
+  smt_onstack := ([]::!smt_onstack)
 
 let smt_pop () : unit =
-  match smt_command "(pop)" with
-  | Success -> smt_fdepth := (!smt_fdepth - 1);
-               begin
-                 match !smt_onstack with
-                 | x :: xs -> smt_onstack := xs
-                 | [] -> assert false
-               end
-  | _ -> raise (SMT_error "Pop failed!")
+  smt_command "(pop)";
+  decr smt_fdepth;
+  smt_onstack := List.tl !smt_onstack
 
 
 let smt_reset () : unit =
-  let rec do_n (n : int) (f : unit -> unit) : unit =
-     match n with
-     | 0 -> ()
-     | n -> f() ; do_n (n-1) f
-  in
-  do_n !smt_fdepth smt_pop;
-  smt_fdepth := 0;
-  smt_onstack := [[]]
+  for i = 1 to !smt_fdepth do smt_pop () done;
+  assert (!smt_fdepth = 0);
+  assert (!smt_onstack = [[]])
 
 
 (* Check whether two args are equal under the current assumptions *)
@@ -371,17 +352,13 @@ let smt_test_eq (a1 : Psyntax.args) (a2 : Psyntax.args) : bool =
   let r = smt_check_unsat() in
   smt_pop(); r
 
-let decl_evars (types : smttypeset) : string =
-  let evars =
-    SMTTypeSet.fold
-      (fun x xs -> match x with | (SMT_Var (Vars.EVar(i,e))) -> (Vars.EVar(i,e))::xs
-                                | _  ->  xs )
-       types [] in
-  match evars with
-  | [] -> ""
-  | _  -> let decls = String.concat " " (map (fun e -> "("^Vars.string_var e^" Int)") evars) in
-          "exists "^decls^" "
-
+let decl_evars (types : smttypeset) (s : string) : string =
+  let v2s = function
+    | SMT_Var (Vars.EVar (i, e) as v) ->
+        "(" ^ id_munge (Vars.string_var v) ^ " Int)"
+    | _ -> "" in
+  let prefix = SMTTypeSet.fold (fun v p -> v2s v ^ p) types "" in
+  if prefix = "" then s else "(exists (" ^ prefix ^ ") " ^ s ^ ")"
 
 (* try to establish that the pure parts of a sequent are valid using the SMT solver *)
 let finish_him
@@ -415,10 +392,10 @@ let finish_him
 
     (* Construct and run the query *)
     let asm_sexp = "(and true " ^ asm_eq_sexp ^ " " ^ asm_neq_sexp ^ " " ^ asm_sexp ^ ") " in
-    let obl_sexp = "( " ^
-      (decl_evars (SMTTypeSet.diff obl_types (SMTTypeSet.union ts_eqneq_types asm_types))) ^
-      obl_sexp ^ ")" in
-
+    let obl_sexp =
+      decl_evars
+        (SMTTypeSet.diff obl_types (SMTTypeSet.union ts_eqneq_types asm_types))
+        obl_sexp in
     let query = "(not (=> " ^ asm_sexp ^ obl_sexp ^ "))"
     in smt_assert query;
 

@@ -1,21 +1,20 @@
 /********************************************************
-   This file is part of coreStar 
+   This file is part of coreStar
 	src/prover/smtparse.ml
-   Release 
+   Release
         $Release$
-   Version 
+   Version
         $Rev$
    $Copyright$
-   
-   coreStar is distributed under a BSD license,  see, 
+
+   coreStar is distributed under a BSD license,  see,
       LICENSE.txt
  ********************************************************/
 
-%{ (* header *)
-
-open Smtsyntax 
-
-%} 
+%{
+  open Format
+  open Smtsyntax
+%}
 
 %token LPAREN
 %token RPAREN
@@ -30,9 +29,8 @@ open Smtsyntax
 %start main             /* the entry point */
 %type <Smtsyntax.smt_response> main
 %%
-main: 
+main:
   | UNSUPPORTED                           { Unsupported }
-  | SUCCESS                               { Success }
   | LPAREN ERROR STRING_CONSTANT RPAREN   { Error $3 }
   | SAT                                   { Sat }
   | UNSAT                                 { Unsat }

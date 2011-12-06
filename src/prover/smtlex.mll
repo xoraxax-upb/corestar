@@ -13,7 +13,8 @@
 
 
 {
-open Smtparse
+  open Format
+  open Smtparse
 }
 
 let  quote = '\''
@@ -26,14 +27,15 @@ let  string_char = escape_char | ['\000' - '\033'] | ['\035' - '\091'] | ['\093'
 let string_constant = '"' string_char* '"'
 
 rule token = parse
-  | [' ' '\t' '\n']  { token lexbuf }     (* skip blanks *)
+  | [' ' '\t' '\n' '\r']
+                     { token lexbuf }     (* skip blanks *)
   | '('              { LPAREN }
   | ')'              { RPAREN }
   | "unsupported"    { UNSUPPORTED }
-  | "success"        { SUCCESS }
   | "error"          { ERROR }
   | "sat"            { SAT }
   | "unsat"          { UNSAT }
   | "unknown"        { UNKNOWN }
   | string_constant  { STRING_CONSTANT (Lexing.lexeme lexbuf) }
   | eof              { raise End_of_file }
+  | _ as c           { eprintf "@[offending character %x@." (Char.code c); assert false }
