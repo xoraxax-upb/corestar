@@ -14,6 +14,7 @@
 
 open Clogic
 open Congruence
+open Corestar_std
 open Cterm
 open Debug
 open Format
@@ -38,6 +39,22 @@ let smt_memo = Hashtbl.create 31;;
 
 let smt_onstack = ref [[]];;
 
+let predeclared = ref StringSet.empty
+
+let send_custom_commands =
+  let decl_re = Str.regexp "[ \t]*([ \t]*declare-fun[ \t]+\\([^ \t()]+\\)" in
+  fun () ->
+  if !Config.smt_custom_commands = "" then ();
+  let cc = open_in !Config.smt_custom_commands in
+  try while true do begin
+    let cmd = input_line cc in
+    if Config.smt_debug() then printf "@[%s@." cmd;
+    if Str.string_match decl_re cmd 0 then
+      predeclared := StringSet.add (Str.matched_group 1 cmd) !predeclared;
+    output_string !smtin cmd;
+    output_char !smtin '\n'
+  end done
+  with End_of_file -> close_in cc
 
 let smt_init () : unit =
   smtpath :=
@@ -58,7 +75,8 @@ let smt_init () : unit =
         smtout_lex := Lexing.from_channel !smtout;
         Config.smt_run := true;
         if Config.smt_debug() then printf "@[SMT running.@.";
-        output_string i "(set-option :print-success false)\n"; flush i
+        output_string i "(set-option :print-success false)\n";
+        send_custom_commands (); flush i
       end
     with
     | Unix_error(err,f,a) ->
@@ -149,7 +167,6 @@ module SMTTypeSet =
     let compare = compare
   end)
 type smttypeset = SMTTypeSet.t
-
 
 let smt_union_list (l : smttypeset list) : smttypeset =
   fold_right SMTTypeSet.union l SMTTypeSet.empty
@@ -291,12 +308,6 @@ let smt_listen () =
     | Error e -> raise (SMT_error e)
     | response -> response
 
-let send_custom_commands () =
-  if !Config.smt_custom_commands = "" then ();
-  let cc = open_in !Config.smt_custom_commands in
-  try while true do output_char !smtin (input_char cc) done
-  with End_of_file -> close_in cc
-
 let smt_command
     (cmd : string)
     : unit =
@@ -308,6 +319,15 @@ let smt_command
     flush !smtin;
   with End_of_file | Sys_error _ -> raise SMT_fatal_error
 
+let send_types types =
+  let name = function
+    | SMT_Var v -> Vars.string_var v
+    | SMT_Pred (n, _)
+    | SMT_Op (n, _) -> n in
+  let f x =
+    if not (StringSet.mem (name x) !predeclared) then
+      smt_command (string_sexp_decl x) in
+  SMTTypeSet.iter f types
 
 let smt_assert (ass : string) : unit =
   let cmd = "(assert " ^ ass ^ " )" in
@@ -320,7 +340,6 @@ let smt_check_sat () : bool =
       if Config.smt_debug() then printf "@[[Found memoised SMT call!]@.";
       x
     with Not_found ->
-      send_custom_commands ();
       smt_command "(check-sat)";
       let x = match smt_listen () with
         | Sat -> true
@@ -395,7 +414,9 @@ let finish_him
     let types = smt_union_list [ts_types; asm_types; obl_types] in
 
     (* declare variables and predicates *)
-    SMTTypeSet.iter (fun x -> ignore (smt_command (string_sexp_decl x))) types;
+    send_types types;
+(*     SMTTypeSet.iter (fun x -> ignore (smt_command (string_sexp_decl x)))
+types; *)
 
     (* Construct and run the query *)
     let asm_sexp = "(and true " ^ asm_eq_sexp ^ " " ^ asm_neq_sexp ^ " " ^ asm_sexp ^ ") " in
@@ -473,7 +494,9 @@ let ask_the_audience
     let types = smt_union_list [ts_types; form_types] in
 
     (* declare predicates *)
-    SMTTypeSet.iter (fun x -> ignore(smt_command (string_sexp_decl x))) types;
+    send_types types;
+(*     SMTTypeSet.iter (fun x -> ignore(smt_command (string_sexp_decl x)))
+types; *)
 
     (* Assert the assumption *)
     let assm_query = "(and true " ^ ts_eq_sexp ^" "^ ts_neq_sexp ^" "^ form_sexp ^ ")"
