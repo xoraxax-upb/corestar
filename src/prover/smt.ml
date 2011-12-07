@@ -34,7 +34,7 @@ let smtpath = ref ""
 
 let smtout_lex = ref (Lexing.from_string "");;
 
-let smt_memo = Hashtbl.create 1;;
+let smt_memo = Hashtbl.create 31;;
 
 let smt_onstack = ref [[]];;
 
@@ -161,7 +161,6 @@ let rec args_smttype (arg : Psyntax.args) : smttypeset =
           let rxp = (Str.regexp "^\\(-?[0-9]+\\)") in
           if Str.string_match rxp s 0 then SMTTypeSet.empty
           else SMTTypeSet.singleton (SMT_Op("string_const_"^s, 0))
-
   | Arg_op ("builtin_plus",args) -> smt_union_list (map args_smttype args)
   | Arg_op ("builtin_minus",args) -> smt_union_list (map args_smttype args)
   | Arg_op ("builtin_mult",args) -> smt_union_list (map args_smttype args)
@@ -292,6 +291,12 @@ let smt_listen () =
     | Error e -> raise (SMT_error e)
     | response -> response
 
+let send_custom_commands () =
+  if !Config.smt_custom_commands = "" then ();
+  let cc = open_in !Config.smt_custom_commands in
+  try while true do output_char !smtin (input_char cc) done
+  with End_of_file -> close_in cc
+
 let smt_command
     (cmd : string)
     : unit =
@@ -315,6 +320,7 @@ let smt_check_sat () : bool =
       if Config.smt_debug() then printf "@[[Found memoised SMT call!]@.";
       x
     with Not_found ->
+      send_custom_commands ();
       smt_command "(check-sat)";
       let x = match smt_listen () with
         | Sat -> true
@@ -322,6 +328,7 @@ let smt_check_sat () : bool =
         | Unknown -> if Config.smt_debug() then printf
           "@[[Warning: smt returned 'unknown' rather than 'sat']@."; true
         | _ -> failwith "TODO" in
+      if Config.smt_debug () then printf "@[  %b@." x;
       Hashtbl.add smt_memo !smt_onstack x;
       x
 
