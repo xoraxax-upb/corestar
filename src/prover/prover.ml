@@ -70,7 +70,7 @@ let rec sequent_ass_reps sequent reps =
 
 let contains ts form pat : bool  =
   try
-    match_form true ts form pat (fun (ts2,_) -> if Cterm.ts_eq ts ts2 (*This checks that no unification has occured in the contains*) then true else  raise Backtrack.No_match)
+    match_form true ts form pat (||) (fun (ts2,_) -> if Cterm.ts_eq ts ts2 (*This checks that no unification has occured in the contains*) then true else  raise Backtrack.No_match)
   with No_match ->
     false
 
@@ -183,16 +183,20 @@ let apply_rule
   let ts = blank_pattern_vars seq.ts in
   (* Match obligation *)
   match_form true ts seq.obligation sr.conclusion.obligation_diff
+    (@)
     (fun (ts,ob) ->
   (* Match antiframe_diff *)
   match_form true ts seq.antiframe sr.conclusion.antiframe_diff
+    (@)
     (fun (ts,ant) -> 
-      (* Match assumption_diff *)
-      match_form true ts seq.assumption sr.conclusion.assumption_diff
+  (* Match assumption_diff *)
+  match_form true ts seq.assumption sr.conclusion.assumption_diff
+    (@)
     (fun (ts,ass) ->
 	  (* match assumption_not removed *)
 	  let ass_f = {ass with spat=RMSet.union ass.spat seq.matched} in
 	  match_form true ts ass_f sr.conclusion.assumption_same
+            (@)
 	    (fun (ts,_) ->
 	      if (not (is_sempty sr.without_left) && contains ts ass_f sr.without_left) then
 		raise No_match
