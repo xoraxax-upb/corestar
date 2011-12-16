@@ -273,6 +273,8 @@ type formset_hashtbl = (int, formset) Hashtbl.t
 (* table associating a cfg node to a set of heaps *)
 let formset_table : formset_hashtbl = Hashtbl.create 10007
 
+let flush_cache () =
+  Hashtbl.clear formset_table
 
 let formset_table_add key s = 
   Hashtbl.add formset_table key s
@@ -578,6 +580,7 @@ let verify
     (abs_rules : logic) 
     : bool 
     =
+  flush_cache ();
   (* remove methods that are declared abstraction *)
   exec_type := SymExec;
   curr_logic := lo;
@@ -618,6 +621,7 @@ let verify_ensures
      (abs_rules : logic) 
      : unit 
      =
+  flush_cache ();
   (* construct the specification of the ensures clause *)
 	let rec conjoin_disjunctions (d1 : inner_form list) (d2 : inner_form list) : inner_form list =
 		match d1 with
@@ -690,7 +694,8 @@ let get_frame
      (lo : logic) 
      (abs_rules : logic) 
      : inner_form list 
-     = 
+     =
+  flush_cache ();
   exec_type := SymExec;
   curr_logic := lo;
   curr_abs_rules := abs_rules;
@@ -748,6 +753,7 @@ let bi_abduct
     (abs_rules : logic) 
     : (inner_form * inner_form) list
     =
+  flush_cache ();
   curr_logic := lo;
   curr_abduct_logic := abduct_lo;
   curr_abs_rules := abs_rules;
