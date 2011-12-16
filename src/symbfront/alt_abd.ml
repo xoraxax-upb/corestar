@@ -121,11 +121,16 @@ let mk_cfg cs =
   let g = mk_intermediate_cfg cs in
   simplify_cfg g
 
+let compute_call_graph _ = failwith "todo"
+
+let compute_scc_dag _ = failwith "todo"
+
+let interpret_scc_dag _ = failwith "todo" (* interpret in postorder *)
+
 let interpret gs =
-  let f { C.proc_name=n; C.proc_spec=_; C.proc_body=_ } =
-    eprintf "@[int %s@." n in
-  List.iter f gs
-(*   failwith "todo" *)
+  let cg = compute_call_graph gs in
+  let scc_dag = compute_scc_dag cg in
+  interpret_scc_dag scc_dag
 
 let print_Cfg { C.proc_name=n; C.proc_spec=_; C.proc_body=g } =
   printf "@[Graph for %s:@\n" n;
@@ -141,9 +146,11 @@ let output_CfgH { C.proc_name=n; C.proc_spec=_; C.proc_body=g } =
 
 let main f =
   let ps = parse f in
-  (* TODO: skip next two, and move printing. *)
+
+  (* TODO: skip next two, and move printing in mk_cfg. *)
   let igs = List.map (map_proc_body mk_intermediate_cfg) ps in
   List.iter output_CfgH igs;
+
   let gs = List.map (map_proc_body mk_cfg) ps in
   List.iter output_Cfg gs;
   interpret gs

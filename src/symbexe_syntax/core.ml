@@ -33,5 +33,4 @@ type core_statement =
   | Goto_stmt_core of string list
   | End
 type symb_question = core_statement list procedure
-type symb_test =
-  | SpecTest of string * Spec.spec * core_statement list * bool
+type symb_test = symb_question * bool (* snd is expected answer *)

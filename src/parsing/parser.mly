@@ -465,7 +465,8 @@ symb_question:
 ;
 
 symb_test: 
-  | SPECTEST identifier COLON spec QUESTIONMARK boolean core_stmt_list {SpecTest($2,$4,$7,$6)}
+  | SPECTEST identifier COLON spec QUESTIONMARK boolean core_stmt_list
+    {({proc_name=$2; proc_spec=$4; proc_body=$7} , $6)}
 ;   
    
 symb_question_file: 

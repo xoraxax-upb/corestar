@@ -68,7 +68,7 @@ let main () : unit =
           "Test" in
     printf "@[";
     List.iter (
-    function Core.SpecTest (mname,spec,core,result) ->
+    function ({proc_name=mname;proc_spec=spec;proc_body=core}, result) ->
       let cfg = map Cfg_core.mk_node core in
       if Symexec.verify mname cfg spec lo abs_rules = result
       then printf "."
