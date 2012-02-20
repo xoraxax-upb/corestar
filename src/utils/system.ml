@@ -38,19 +38,23 @@ let string_of_file fname =
   s
 
 
+let parse_chan pars lexe name lexbuf = 
+  try 
+    let ret = pars lexe lexbuf in 
+    Parsing.clear_parser ();
+    ret
+  with Parsing.Parse_error -> Printf.fprintf stderr "Failed to parse %s\n" name; exit 1
+  |  Failure s ->  Printf.fprintf stderr "Failed to parse %s\n%s\n" name s; exit 1 
 
 let parse_file pars lexe fname ftype = 
-  try 
-    if log log_phase then 
-      Printf.printf "Start parsing %s in %s...\n" ftype fname;
-    let ichan = open_in fname in 
-    let ret = pars lexe (Lexing.from_channel ichan) in 
-    Parsing.clear_parser ();
-    close_in ichan;
-    if log log_phase then Printf.printf "Parsed %s!\n" fname;
-    ret
-  with Parsing.Parse_error -> Printf.printf "Failed to parse %s\n" fname; exit 1
-  |  Failure s ->  Printf.printf "Failed to parse %s\n%s\n" fname s; exit 1 
+  if log log_phase then 
+    Printf.printf "Start parsing %s in %s...\n" ftype fname;
+  let ichan = open_in fname in 
+  let lexbuf = Lexing.from_channel ichan in
+  let ret = parse_chan pars lexe fname lexbuf in
+  close_in ichan;
+  ret
+
 
 (* 
   Check if file exists in current directory, or in list of directories supplied.  
