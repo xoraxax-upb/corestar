@@ -5,3 +5,5 @@ _build
 tags
 .install.mk
 rg.log
+bin
+src.subdirs
