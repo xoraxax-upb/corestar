@@ -44,7 +44,8 @@ let predeclared = ref StringSet.empty
 let send_custom_commands =
   let decl_re = Str.regexp "[ \t]*([ \t]*declare-fun[ \t]+\\([^ \t()]+\\)" in
   fun () ->
-  if !Config.smt_custom_commands = "" then ();
+  if !Config.smt_custom_commands = "" then ()
+  else
   let cc = open_in !Config.smt_custom_commands in
   try while true do begin
     let cmd = input_line cc in
