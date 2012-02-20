@@ -46,6 +46,9 @@ val parse_file :
   (Lexing.lexbuf->'a) -> 
   string -> string -> 'b
 
+val parse_chan : 
+  ('a -> Lexing.lexbuf -> 'b) -> 'a -> string -> Lexing.lexbuf -> 'b
+
 (** 
   [find_file_from_dirs dirs f] tries to find file [f] (possibly a directory)
   in the current directory and then in [dirs]. Returns the first location
