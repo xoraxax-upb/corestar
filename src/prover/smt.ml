@@ -356,12 +356,12 @@ let smt_check_unsat () : bool =
   not (smt_check_sat ())
 
 let smt_push () : unit =
-  smt_command "(push)";
+  smt_command "(push 1)";
   incr smt_fdepth;
   smt_onstack := ([]::!smt_onstack)
 
 let smt_pop () : unit =
-  smt_command "(pop)";
+  smt_command "(pop 1)";
   decr smt_fdepth;
   smt_onstack := List.tl !smt_onstack
 
