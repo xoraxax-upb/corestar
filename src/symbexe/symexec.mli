@@ -88,3 +88,8 @@ val bi_abduct :
   Psyntax.logic ->
   Psyntax.logic ->
   (Sepprover.inner_form * Sepprover.inner_form) list
+
+val param_sub: Psyntax.args list -> Psyntax.varmap
+val eliminate_ret_vs : string -> Psyntax.var list -> Sepprover.inner_form_af -> Sepprover.inner_form_af
+
+
