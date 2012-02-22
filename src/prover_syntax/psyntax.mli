@@ -157,6 +157,7 @@ type question =
   | Equal of pform * args * args
   | Abs of pform
   | Abduction of pform * pform
+  |  SpecAss of Vars.var list * pform * pform * pform * args list
 type test =
     TImplication of pform * pform * bool
   | TInconsistency of pform * bool

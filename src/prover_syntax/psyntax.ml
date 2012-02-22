@@ -189,7 +189,7 @@ and string_args_list ppf argsl =
   match argsl with 
     [] -> Format.fprintf ppf ""
   | [a] -> Format.fprintf ppf "%a" string_args a
-  | a::al -> Format.fprintf ppf "%a,@ %a" string_args a string_args_list al
+  | a::al -> Format.fprintf ppf "%a, %a" string_args a string_args_list al
 and string_args_fldlist ppf fdl =  
   match fdl with 
     [] -> Format.fprintf ppf ""
@@ -518,6 +518,7 @@ type question =
   |  Equal of pform * args * args
   |  Abs of pform 
   |  Abduction of pform * pform 
+  |  SpecAss of Vars.var list * pform * pform * pform * args list
 
 
 type test =

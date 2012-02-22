@@ -39,9 +39,11 @@ let location_to_string pos =
   Printf.sprintf "Line %d character %d" pos.pos_lnum  (pos.pos_cnum - pos.pos_bol + 1)
 
 let parse_error s =
-  let start_pos = Parsing.symbol_start_pos () in
-  let end_pos = Parsing.symbol_end_pos () in
-  Printf.printf "Error between %s and %s\n%s\n" (location_to_string start_pos) (location_to_string end_pos) s
+  try
+          let start_pos = Parsing.symbol_start_pos () in
+          let end_pos = Parsing.symbol_end_pos () in
+          Printf.printf "Error between %s and %s\n%s\n" (location_to_string start_pos) (location_to_string end_pos) s
+  with Invalid_argument(x) -> ()
 
 let parse_warning s =
   let start_pos = Parsing.symbol_start_pos () in
@@ -73,6 +75,7 @@ let parse_warning s =
 %token DOT
 %token EMP
 %token END
+%token ENTER
 %token EOF
 %token EQUALS 
 %token EQUIV
@@ -113,6 +116,7 @@ let parse_warning s =
 %token SEMICOLON 
 %token SPECIFICATION
 %token SPECTEST
+%token SPECASS
 %token <string> STRING_CONSTANT 
 %token TRUE
 %token VDASH
@@ -135,6 +139,9 @@ let parse_warning s =
 
 %start question_file
 %type <Psyntax.question list> question_file
+
+%start single_question
+%type <Psyntax.question option> single_question
 
 %start test_file
 %type <Psyntax.test list> test_file
@@ -431,6 +438,14 @@ question:
   | INCONSISTENCY COLON formula_npv {Inconsistency($3)}
   | FRAME COLON formula_npv VDASH formula_npv {Frame($3,$5)}
   | ABDUCTION COLON formula_npv VDASH formula_npv {Abduction($3,$5)}
+  | ABSRULE COLON formula_npv { Abs($3) }
+  | SPECASS COLON core_assn_args COLON formula_npv COLON formula_npv COLON
+  formula_npv COLON term_npv_list { SpecAss($3, $5, $7, $9, $11) }
+;
+
+single_question:
+  | EOF { None }
+  | question ENTER { Some($1) }
 ;
 
 test:
