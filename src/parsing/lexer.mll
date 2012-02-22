@@ -74,6 +74,7 @@ let kwd_or_else =
     "rule", RULE;
     "Specification", SPECIFICATION;
     "SpecTest", SPECTEST; 
+    "SpecAss", SPECASS;
     "True", TRUE;
     "where", WHERE;
     "with", WITH;
@@ -151,6 +152,7 @@ rule token = parse
   | ">=" { CMP_GE }
   | ">" { CMP_GT }
   | eof { EOF }
+  | "ENTER" { ENTER }
 
   (* Both at_identifer and identifer should produce IDENTIFIER *)
   | at_identifier as s { kwd_or_else (IDENTIFIER s) s }
