@@ -121,7 +121,7 @@ let has_pp_c ts c : bool =
       FArg_var v ->
 	begin
 	  match v with 
-	    AnyVar _ -> local_debug
+          AnyVar _ -> local_debug
 	  | EVar _ -> (find_good_rep ts c) = c
 	  | PVar _ -> VarMap.mem v ts.pvars
 	end
@@ -131,7 +131,8 @@ let has_pp_c ts c : bool =
     |  _  
       -> true
   with Not_found ->
-    false 
+          false
+
 
 
 (* Remove pattern match variables from pretty print where possible *)
@@ -515,12 +516,12 @@ let normalise ts r =
   CC.normalise ts.cc r
 
 
-
+(* 
 let get_eqs ts : (Psyntax.args * Psyntax.args ) list = 
   let mask = has_pp_c ts in 
   let map = fun c -> get_pargs false ts [] c in 
   CC.get_eqs mask map ts.cc 
-
+*)
 
 let get_neqs ts : (Psyntax.args * Psyntax.args ) list = 
   let mask = has_pp_c ts in 
@@ -532,6 +533,8 @@ let get_eqs_all ts : (Psyntax.args * Psyntax.args ) list =
   let mask = fun _ -> true in 
   let map = fun c -> get_pargs false ts [] c in 
   CC.get_eqs mask map ts.cc 
+
+let get_eqs = get_eqs_all
 
 let get_neqs_all ts : (Psyntax.args * Psyntax.args ) list = 
   let mask = fun _ -> true in 
@@ -567,26 +570,68 @@ let get_term ts r : Psyntax.args =
 
 let kill_var ts v =
   try 
-    let r = VarMap.find v ts.pvars in 
-    let cc = CC.delete ts.cc r in 
-    let pvars = VarMap.remove v ts.pvars in 
-    let pp_term = CMap.find r ts.originals in
-    let originals = CMap.remove r ts.originals in 
-    let originals = 
-      match pp_term with
-	FArg_var (PVar (v',n)) when ((PVar (v',n))=v) -> 
-	    CMap.add r (FArg_var (Vars.freshen_exists v)) originals 
-      |  _ -> originals
-      in
-    {ts with pvars = pvars; cc=cc; originals=originals} 
+   let r = VarMap.find v ts.pvars in 
+   let cc = CC.delete ts.cc r in 
+   let pvars = VarMap.remove v ts.pvars in 
+   let pp_term = CMap.find r ts.originals in
+   let originals = CMap.remove r ts.originals in 
+   let originals = 
+     match pp_term with
+      FArg_var (PVar (v',n)) when ((PVar (v',n))=v) -> 
+          CMap.add r (FArg_var (Vars.freshen_exists v)) originals 
+     |  _ -> originals
+     in
+   {ts with pvars = pvars; cc=cc; originals=originals} 
   with Not_found -> 
     ts
 
+
+let kill_var2 ts v =
+  try 
+    let r = VarMap.find v ts.pvars in
+    let rep = CC.normalise ts.cc r in
+    try
+    if r = rep then begin
+            let other = List.nth (CC.others ts.cc rep) 1 in
+            (* Printf.printf "R %i->%i\n" r other; *)
+            let cc = ts.cc in
+            let pvars = VarMap.remove v ts.pvars in
+            let pp_term_rep = CMap.find r ts.originals in
+            let pp_term_other = CMap.find other ts.originals in
+            let originals = CMap.remove r ts.originals in
+            let pvars = match pp_term_other with 
+                FArg_var (PVar (v',n)) -> VarMap.add (PVar (v',n)) rep pvars 
+                | _ -> pvars
+            in
+            let originals = CMap.add rep pp_term_other originals 
+            in
+            let cc = CC.remove_from_cl_and_freshen cc rep other in
+            {ts with pvars = pvars; cc=cc; originals=originals}, Some
+            pp_term_rep
+            end else
+            kill_var ts v, None
+    with Failure("nth") ->
+            kill_var ts v, None
+  with Not_found -> 
+    ts, None
+
+
 let update_var_to ts v e = 
+  (* CC.print ts.cc; *)
   let c,ts = add_term false e ts in
-  let ts = kill_var ts v in 
-  let c2,ts = add_term false (Arg_var v) ts in 
-  let ts = make_equal ts c c2 in 
+  let ts, pp_term_some = kill_var2 ts v in
+  (* CC.print ts.cc; *)
+  let c2,ts = add_term true (Arg_var v) ts in 
+  let originals =
+    match pp_term_some with
+    Some pp_term ->
+    (match pp_term with
+      FArg_var (PVar (v',n)) when ((PVar (v',n))=v) -> 
+         CMap.add c2 (FArg_var v) ts.originals 
+      |  _ -> ts.originals)
+    | None -> ts.originals
+  in
+  let ts = make_equal {ts with originals=originals} c c2 in 
   ts
 
 
