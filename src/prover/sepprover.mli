@@ -24,6 +24,7 @@ val inner_form_af_to_af : inner_form_af -> inner_form
 val inner_truth : inner_form
 val inner_falsum : inner_form
 val convert : form -> inner_form option
+val convert_wo_eqs : form -> inner_form option
 val conjoin : form -> inner_form -> inner_form
 val conjoin_inner : inner_form -> inner_form -> inner_form
 val conjoin_af : inner_form_af -> form -> inner_form -> inner_form_af

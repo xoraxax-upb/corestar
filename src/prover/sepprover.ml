@@ -51,6 +51,11 @@ open Psyntax
         try Some (Clogic.convert_with_eqs false form)
         with Contradiction -> None 
 
+    let convert_wo_eqs : form -> inner_form option  
+      = fun form -> 
+        try Some (Clogic.convert_without_eqs false form)
+        with Contradiction -> None 
+
     let conjoin : form -> inner_form -> inner_form 
       = fun form inner_form -> Clogic.conjoin false inner_form (Clogic.convert_to_inner form)
 
