@@ -59,6 +59,9 @@ module Idmap :
     val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
   end
 val pp_dotty_transition_system : unit -> unit
+type formset_entry = Sepprover.inner_form_af * node
+type formset = formset_entry list
+type formset_hashtbl = (int, formset) Hashtbl.t
 val parameter : int -> string
 exception Contained
 val verify :
