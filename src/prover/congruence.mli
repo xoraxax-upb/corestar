@@ -49,6 +49,7 @@ module type PCC =
     val determined_exists :
       t -> (constant list) -> constant -> constant -> t * (constant * constant) list
     val compress_full : t -> t * (constant -> constant)
+    val remove_from_cl_and_freshen : t -> constant -> constant -> t
     val print : t -> unit
     val pretty_print :
       (constant -> bool) ->

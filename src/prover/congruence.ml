@@ -32,7 +32,7 @@ let cc_debug = ref false
 module type PCC = 
     sig
       type t
-      type constant 
+      type constant
 
       type term = 
 	| TConstant of constant
@@ -129,6 +129,7 @@ module type PCC =
 	 but each constant is a representative. 
          Also returns a map for the updates to each constant*)
       val compress_full : t -> t*(constant -> constant) 
+      val remove_from_cl_and_freshen : t -> constant -> constant -> t
 
       (* {{{  Debug stuff *)
       val print : t -> unit 
@@ -456,7 +457,16 @@ module PersistentCC (A : GrowablePersistentArray) : PCC =
       printf "Rep\n   ";
       for i = 0 to n do
 	if i <> (A.get rs i) then 
-	  printf "%n|->%n  " i (A.get rs i)
+          (
+          printf "%n|->%n (" i (A.get rs i);
+          (match A.get ts.unifiable (A.get rs i) with
+          Unifiable -> printf "U"
+          | UnifiableExists -> printf "UE"
+          | Exists -> printf "E"
+          | Standard -> printf "S"
+          | Deleted -> printf "D");
+          printf ")  "
+          )
       done ;
 
 (* 
@@ -476,7 +486,7 @@ module PersistentCC (A : GrowablePersistentArray) : PCC =
 	  end
       done; 
 *)
-(*
+
       printf "\nClass list\n";
       for i = 0 to n do 
 	if (A.get (ts.classlist) i) <> [i] then 
@@ -488,7 +498,7 @@ module PersistentCC (A : GrowablePersistentArray) : PCC =
 	    printf ";\n"
 	  end
       done;
-*)
+
       printf "\nNot equal\n";
       CCMap.iter  (fun (a,b) () -> printf "  %n!=%n;\n" a b) ts.not_equal;
 
@@ -507,7 +517,7 @@ module PersistentCC (A : GrowablePersistentArray) : PCC =
 	  end
       done;
 
-      printf "Injective info:\n";
+      printf "\nInjective info:\n";
       for i = 0 to n do
 	match A.get ts.constructor i with
 	  Not -> ()
@@ -546,6 +556,9 @@ module PersistentCC (A : GrowablePersistentArray) : PCC =
     let clear_cl ts r = 
 	{ts with classlist = A.set ts.classlist r [] }  
 
+    let remove_from_cl_and_freshen ts rep c = 
+        {ts with classlist = A.set (A.set ts.classlist rep (List.filter (fun x -> x != c)
+        (get_cl ts rep))) c [c]; representative = A.set ts.representative c c}
 
     let make_not_equal (ts : t) (a : constant) (b : constant) : t = 
       let a,b = rep ts a, rep ts b in 
@@ -1179,7 +1192,7 @@ module PersistentCC (A : GrowablePersistentArray) : PCC =
       else if rep_uneq ts c1 c2 then 
 	raise Contradiction
       else if no_live ts c1 && rep_not_used_in ts c1 cl then 
-	begin 
+	begin
           (* They can be made equal *)
 	  (* TODO Add occurs check *)
 	  (make_equal ts c1 c2), []
