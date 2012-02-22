@@ -143,14 +143,15 @@ type inner_sequent_rule = {
   where : Psyntax.where list;
 }
 val convert_rule : sequent_rule -> inner_sequent_rule
-val match_form : bool -> Cterm.term_structure -> formula -> syntactic_form ->
-  ('a -> 'a -> 'a) -> (Cterm.term_structure * formula -> 'a) -> 'a
+val match_form : bool -> Cterm.term_structure -> formula -> syntactic_form -> (Cterm.term_structure * formula -> 'a) -> 'a
 val apply_or_left : sequent -> sequent list
 val apply_or_right : sequent -> sequent list list
 val get_frame : sequent -> F.ts_formula
 val get_frames : sequent list -> F.ts_formula list
 val get_frames_antiframes : sequent list -> AF.ts_formula list
 val convert_with_eqs : bool -> Psyntax.pform -> F.ts_formula
+val convert_without_eqs : bool -> Psyntax.pform -> F.ts_formula
+
 val convert :
   bool ->
   Cterm.term_structure -> Psyntax.pform -> formula * Cterm.term_structure
