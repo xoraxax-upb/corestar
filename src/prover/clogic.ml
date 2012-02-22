@@ -153,7 +153,10 @@ let pp_ts_formula = pp_whole pp_ts_formula' pp_star
 
 let pp_ts_formula_af' pp ppf first {AF.ts=ts; AF.form=form; AF.antiform=antiform} =
   let first = pp_ts_formula' pp ppf first {F.ts=ts; F.form=form;} in
-  (pp_sep " | ").separator pp_ts_formula ppf first {F.ts=ts; F.form=antiform;}
+  (* (pp_sep " | ").separator pp_ts_formula ppf first {F.ts=ts;
+      F.form=antiform;} *)
+  fprintf ppf "@,  |  "; pp_ts_formula' pp ppf first {F.ts=ts; F.form=antiform;}
+
 
 let pp_ts_formula_af = pp_whole pp_ts_formula_af' pp_star
 
@@ -497,7 +500,6 @@ let match_and_remove
       ts
       term (*formula to match in *)
       pattern (*pattern to match *)
-      combine (* combines results of continuations *)
       cont
     =
   let rec mar_inner
@@ -513,35 +515,29 @@ let match_and_remove
 	if fst(s) = cn then
 	  (* potential match *)
 	  try
-            let result =
-              unifies ts cp (snd(s))
-                (fun ts ->
-                 (* If we are removing matched elements use nterm, otherwise revert to term *)
-                  let nterm = if remove then nterm else term in
-                  if SMSet.has_more pattern then
-                    (* match next entry in the pattern*)
-                    let ((nn,np), pattern) = SMSet.remove pattern in
-                    (* If we are matching the same type of predicate still,
-                       then must back the iterator up across the failed matches.  *)
-                    let nterm = if nn=cn then (RMSet.back nterm count) else nterm in
-                    let np,ts = make_tuple_pattern np ts in
-                    mar_inner
-                      ts
-                      nterm
-                      (nn, np)
-                      pattern
-                      0
-                      cont
-                  else
-                    (* No pattern left, done *)
-                    cont (ts,RMSet.restart nterm)
-                ) in
-            (try
-              combine
-                result
-                (mar_inner ts (RMSet.next term) (cn, cp) pattern (count+1) cont)
-            with Backtrack.No_match -> result)
-          with Backtrack.No_match ->
+	    unifies ts cp (snd(s))
+	      (fun ts ->
+               (* If we are removing matched elements use nterm, otherwise revert to term *)
+		let nterm = if remove then nterm else term in
+		if SMSet.has_more pattern then
+		  (* match next entry in the pattern*)
+		  let ((nn,np), pattern) = SMSet.remove pattern in
+		  (* If we are matching the same type of predicate still,
+		     then must back the iterator up across the failed matches.  *)
+		  let nterm = if nn=cn then (RMSet.back nterm count) else nterm in
+		  let np,ts = make_tuple_pattern np ts in
+		  mar_inner
+		    ts
+		    nterm
+		    (nn, np)
+		    pattern
+		    0
+		    cont
+		else
+                  (* No pattern left, done *)
+		  cont (ts,RMSet.restart nterm)
+	      )
+	  with Backtrack.No_match ->
 	    (* Failed to match *)
 	    mar_inner ts (RMSet.next term) (cn,cp) pattern (count+1) cont
 	else if fst(s) < cn then
@@ -695,12 +691,10 @@ let match_neqs ts neqs sneqs cont =
 
 
 
-let rec match_form remove ts form pat combine (cont : term_structure * formula -> 'a) : 'a =
+let rec match_form remove ts form pat (cont : term_structure * formula -> 'a) : 'a =
   match_and_remove remove ts form.spat pat.sspat
-    combine
     (fun (ts,nspat) ->
       match_and_remove remove ts form.plain pat.splain
-        combine
 	(fun (ts,nplain) ->
 	  match_eqs ts form.eqs pat.seqs
 	    (fun (ts,eqs) ->
@@ -712,21 +706,19 @@ let rec match_form remove ts form pat combine (cont : term_structure * formula -
 			      eqs = eqs;
 			      neqs = neqs;
 			    }
-		    pat.sdisjuncts combine cont
+		    pat.sdisjuncts cont
 		)
 	    )
 	)
     )
-and match_disjunct remove ts form pat_disj combine cont =
+and match_disjunct remove ts form pat_disj cont =
   match pat_disj with
     [] -> cont (ts,form)
   | (x,y)::pat_disj ->
       try
-	match_form remove ts form x combine
-          (fun (ts,form) -> match_disjunct remove ts form pat_disj combine cont)
+	match_form remove ts form x (fun (ts,form) -> match_disjunct remove ts form pat_disj cont)
       with No_match ->
-	match_form remove ts form y combine
-          (fun (ts,form) -> match_disjunct remove ts form pat_disj combine cont)
+	match_form remove ts form y (fun (ts,form) -> match_disjunct remove ts form pat_disj cont)
 
 
 
@@ -781,6 +773,12 @@ let convert_with_eqs fresh pform =
   let sf = convert_to_inner pform in
   let ts = new_ts () in
   let form,ts = convert_sf fresh ts sf in
+  mk_ts_form ts form
+
+let convert_without_eqs fresh pform =
+  let sf = convert_to_inner pform in
+  let ts = new_ts () in
+  let form,ts = convert_sf_without_eqs fresh ts sf in
   mk_ts_form ts form
 
 let convert fresh ts pform =
